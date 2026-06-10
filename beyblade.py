@@ -31,7 +31,7 @@ def save_data(df):
 df_registrations = load_data()
 
 # ════════════════════════════════════════════════════════════
-# 👑 頂部大分頁切換（免除 pages 資料夾的煩惱！）
+# 👑 頂部大分頁切換
 # ════════════════════════════════════════════════════════════
 tab1, tab2 = st.tabs(["📝 選手零件登記表單", "🏆 主辦人計分與晉級控制台"])
 
@@ -41,7 +41,6 @@ tab1, tab2 = st.tabs(["📝 選手零件登記表單", "🏆 主辦人計分與�
 with tab1:
     st.title("🌀 戰鬥陀螺大賽零件登記系統")
     
-    # 大賽最新規則公告區
     st.markdown("""
     ### 📝 大賽核心規則與限制
     1. **每人需登記 4 顆陀螺**，且 4 顆的**「固鎖」與「軸心」皆絕對不能重複**！
@@ -54,7 +53,6 @@ with tab1:
     """)
     st.write("---")
 
-    # 填寫表單
     with st.form("registration_form", clear_on_submit=False):
         player_name = st.text_input("👤 選手名稱 / 綽號", placeholder="請輸入您的名字")
         
@@ -70,7 +68,7 @@ with tab1:
             st.subheader("【第三顆】")
             b3 = st.text_input("第三顆 上蓋", key="b3", placeholder="例：Hells Chain")
             r3 = st.text_input("第三顆 固鎖 ⚠️", key="r3", placeholder="例：5-60")
-            bit3 = st.text_input("第三顆 軸心 ⚠️", key="bit3", placeholder="例::High Taper")
+            bit3 = st.text_input("第三顆 軸心 ⚠️", key="bit3", placeholder="例：High Taper")
 
         with col2:
             st.subheader("【第二顆】")
@@ -86,7 +84,6 @@ with tab1:
         st.write("---")
         submit_btn = st.form_submit_button("🚀 提交登記資料")
 
-    # 表單提交邏輯與規則檢查
     if submit_btn:
         b1_clean = b1.strip().lower()
         b2_clean = b2.strip().lower()
@@ -126,7 +123,6 @@ with tab1:
                 st.success(f"🎉 恭喜 【{player_name}】 成功登記！")
                 st.rerun()
 
-    # 顯示登記名單
     st.write("---")
     st.subheader("📊 目前已登記名單")
     if not df_registrations.empty:
@@ -140,8 +136,8 @@ with tab1:
                     save_data(df_registrations)
                     st.success(f"已刪除 【{player_to_delete}】")
                     st.rerun()
-    else:
-        st.info("💡 目前還沒有選手登記喔！")
+else:
+    st.info("💡 目前還沒有選手登記喔！")
 
 # ════════════════════════════════════════════════════════════
 # 【分頁二：主辦人計分與晉級控制台】
@@ -203,30 +199,30 @@ with tab2:
         with col_a:
             st.subheader("🌀 A 組 (循環賽)")
             st.write(f"**【場次 1】** {s['A1']} vs {s['A2']}")
-            s["m1_s1"] = st.number_input(f"{s['A1']} 分數 ", min_value=0, max_value=5, value=int(s["m1_s1"]))
-            s["m1_s2"] = st.number_input(f"{s['A2']} 分數 ", min_value=0, max_value=5, value=int(s["m1_s2"]))
+            s["m1_s1"] = st.number_input(f"{s['A1']} 分數", min_value=0, max_value=5, value=int(s["m1_s1"]), key="m1_s1_input")
+            s["m1_s2"] = st.number_input(f"{s['A2']} 分數", min_value=0, max_value=5, value=int(s["m1_s2"]), key="m1_s2_input")
             
             st.write(f"**【場次 3】** {s['A2']} vs {s['A3']}")
-            s["m3_s1"] = st.number_input(f"{s['A2']} 分數 ", min_value=0, max_value=5, value=int(s["m3_s1"]))
-            s["m3_s2"] = st.number_input(f"{s['A3']} 分數 ", min_value=0, max_value=5, value=int(s["m3_s2"]))
+            s["m3_s1"] = st.number_input(f"{s['A2']} 分數 ", min_value=0, max_value=5, value=int(s["m3_s1"]), key="m3_s1_input")
+            s["m3_s2"] = st.number_input(f"{s['A3']} 分數 ", min_value=0, max_value=5, value=int(s["m3_s2"]), key="m3_s2_input")
             
             st.write(f"**【場次 5】** {s['A1']} vs {s['A3']}")
-            s["m5_s1"] = st.number_input(f"{s['A1']} 分數  ", min_value=0, max_value=5, value=int(s["m5_s1"]))
-            s["m5_s2"] = st.number_input(f"{s['A3']} 分數  ", min_value=0, max_value=5, value=int(s["m5_s2"]))
+            s["m5_s1"] = st.number_input(f"{s['A1']} 分數  ", min_value=0, max_value=5, value=int(s["m5_s1"]), key="m5_s1_input")
+            s["m5_s2"] = st.number_input(f"{s['A3']} 分數  ", min_value=0, max_value=5, value=int(s["m5_s2"]), key="m5_s2_input")
 
         with col_b:
             st.subheader("🌀 B 組 (循環賽)")
             st.write(f"**【場次 2】** {s['B1']} vs {s['B2']}")
-            s["m2_s1"] = st.number_input(f"{s['B1']} 分數", min_value=0, max_value=5, value=int(s["m2_s1"]))
-            s["m2_s2"] = st.number_input(f"{s['B2']} 分數", min_value=0, max_value=5, value=int(s["m2_s2"]))
+            s["m2_s1"] = st.number_input(f"{s['B1']} 分數", min_value=0, max_value=5, value=int(s["m2_s1"]), key="m2_s1_input")
+            s["m2_s2"] = st.number_input(f"{s['B2']} 分數", min_value=0, max_value=5, value=int(s["m2_s2"]), key="m2_s2_input")
             
             st.write(f"**【場次 4】** {s['B2']} vs {s['B3']}")
-            s["m4_s1"] = st.number_input(f"{s['B2']} 分數", min_value=0, max_value=5, value=int(s["m4_s1"]))
-            s["m4_s2"] = st.number_input(f"{s['B3']} 分數", min_value=0, max_value=5, value=int(s["m4_s2"]))
+            s["m4_s1"] = st.number_input(f"{s['B2']} 分數 ", min_value=0, max_value=5, value=int(s["m4_s1"]), key="m4_s1_input")
+            s["m4_s2"] = st.number_input(f"{s['B3']} 分數 ", min_value=0, max_value=5, value=int(s["m4_s2"]), key="m4_s2_input")
             
             st.write(f"**【場次 6】** {s['B1']} vs {s['B3']}")
-            s["m6_s1"] = st.number_input(f"{s['B1']} 分數 ", min_value=0, max_value=5, value=int(s["m6_s1"]))
-            s["m6_s2"] = st.number_input(f"{s['B3']} 分數 ", min_value=0, max_value=5, value=int(s["m6_s2"]))
+            s["m6_s1"] = st.number_input(f"{s['B1']} 分數   ", min_value=0, max_value=5, value=int(s["m6_s1"]), key="m6_s1_input")
+            s["m6_s2"] = st.number_input(f"{s['B3']} 分數   ", min_value=0, max_value=5, value=int(s["m6_s2"]), key="m6_s2_input")
 
         # 小組計分公式
         def get_rank(p1, p2, p3, m1_1, m1_2, m2_1, m2_2, m3_1, m3_2):
@@ -238,3 +234,86 @@ with tab2:
             
             if m2_1 > m2_2: stats[p2]["wins"]+=1
             elif m2_2 > m2_1: stats[p3]["wins"]+=1
+            stats[p2]["diff"] += (m2_1 - m2_2)
+            stats[p3]["diff"] += (m2_2 - m2_1)
+            
+            if m3_1 > m3_2: stats[p1]["wins"]+=1
+            elif m3_2 > m3_1: stats[p3]["wins"]+=1
+            stats[p1]["diff"] += (m3_1 - m3_2)
+            stats[p3]["diff"] += (m3_2 - m3_1)
+            sorted_p = sorted(stats.items(), key=lambda x: (x[1]["wins"], x[1]["diff"]), reverse=True)
+            return [sorted_p[0][0], sorted_p[1][0], sorted_p[2][0]]
+
+        rank_A = get_rank(s["A1"], s["A2"], s["A3"], s["m1_s1"], s["m1_s2"], s["m3_s1"], s["m3_s2"], s["m5_s1"], s["m5_s2"])
+        rank_B = get_rank(s["B1"], s["B2"], s["B3"], s["m2_s1"], s["m2_s2"], s["m4_s1"], s["m4_s2"], s["m6_s1"], s["m6_s2"])
+
+        st.write("---")
+        st.subheader("📊 目前小組排名預覽")
+        st.info(f"**🥇 A組第一 (直升四強):** {rank_A[0]} | 🥈 第二: {rank_A[1]} | 🥉 第三: {rank_A[2]}")
+        st.info(f"**🥇 B組第一 (直升四強):** {rank_B[0]} | 🥈 第二: {rank_B[1]} | 🥉 第三: {rank_B[2]}")
+
+        # 📍 第二階段：敗部復活挑戰賽
+        st.write("---")
+        st.header("🔥 第二階段：敗部復活挑戰賽")
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+            st.subheader("⚔️ 敗部戰 1")
+            st.write(f"**A組第二** `{rank_A[1]}` vs **B組第三** `{rank_B[2]}`")
+            s["r1_s1"] = st.number_input(f"{rank_A[1]} 敗部分1", min_value=0, max_value=5, value=int(s["r1_s1"]), key="r1_s1_input")
+            s["r1_s2"] = st.number_input(f"{rank_B[2]} 敗部分2", min_value=0, max_value=5, value=int(s["r1_s2"]), key="r1_s2_input")
+            r1_winner = rank_A[1] if s["r1_s1"] > s["r1_s2"] else rank_B[2]
+        with col_r2:
+            st.subheader("⚔️ 敗部戰 2")
+            st.write(f"**B組第二** `{rank_B[1]}` vs **A組第三** `{rank_A[2]}`")
+            s["r2_s1"] = st.number_input(f"{rank_B[1]} 敗部分3", min_value=0, max_value=5, value=int(s["r2_s1"]), key="r2_s1_input")
+            s["r2_s2"] = st.number_input(f"{rank_A[2]} 敗部分4", min_value=0, max_value=5, value=int(s["r2_s2"]), key="r2_s2_input")
+            r2_winner = rank_B[1] if s["r2_s1"] > s["r2_s2"] else rank_A[2]
+
+        # 📍 第三階段：真正核心四強賽
+        st.write("---")
+        st.header("👑 第三階段：真正核心四強賽")
+        col_sf1, col_sf2 = st.columns(2)
+        with col_sf1:
+            st.subheader("🏆 四強賽 A")
+            st.write(f"**A組第一** `{rank_A[0]}` vs **敗部戰 2 勝者** `{r2_winner}`")
+            s["sf1_s1"] = st.number_input(f"{rank_A[0]} 四強分1", min_value=0, max_value=5, value=int(s["sf1_s1"]), key="sf1_s1_input")
+            s["sf1_s2"] = st.number_input(f"{r2_winner} 四強分2", min_value=0, max_value=5, value=int(s["sf1_s2"]), key="sf1_s2_input")
+            sf1_winner = rank_A[0] if s["sf1_s1"] > s["sf1_s2"] else r2_winner
+            sf1_loser = r2_winner if s["sf1_s1"] > s["sf1_s2"] else rank_A[0]
+        with col_sf2:
+            st.subheader("🏆 四強賽 B")
+            st.write(f"**B組第一** `{rank_B[0]}` vs **敗部戰 1 勝者** `{r1_winner}`")
+            s["sf2_s1"] = st.number_input(f"{rank_B[0]} 四強分3", min_value=0, max_value=5, value=int(s["sf2_s1"]), key="sf2_s1_input")
+            s["sf2_s2"] = st.number_input(f"{r1_winner} 四強分4", min_value=0, max_value=5, value=int(s["sf2_s2"]), key="sf2_s2_input")
+            sf2_winner = rank_B[0] if s["sf2_s1"] > s["sf2_s2"] else r1_winner
+            sf2_loser = r1_winner if s["sf2_s1"] > s["sf2_s2"] else rank_B[0]
+
+        # 📍 第四階段：決賽圈
+        st.write("---")
+        st.header("✨ 第四階段：榮譽決賽圈")
+        col_bm, col_f = st.columns(2)
+        with col_bm:
+            st.subheader("🥉 季軍賽 (銅牌戰)")
+            st.write(f"`{sf1_loser}` vs `{sf2_loser}`")
+            s["bm_s1"] = st.number_input(f"{sf1_loser} 決賽分1", min_value=0, max_value=5, value=int(s["bm_s1"]), key="bm_s1_input")
+            s["bm_s2"] = st.number_input(f"{sf2_loser} 決賽分2", min_value=0, max_value=5, value=int(s["bm_s2"]), key="bm_s2_input")
+        with col_f:
+            st.subheader("🥇 🚀 總冠軍賽 (金牌戰)")
+            st.write(f"👑 `{sf1_winner}` vs 👑 `{sf2_winner}`")
+            s["f_s1"] = st.number_input(f"{sf1_winner} 決賽分3", min_value=0, max_value=5, value=int(s["f_s1"]), key="f_s1_input")
+            s["f_s2"] = st.number_input(f"{sf2_winner} 決賽分4", min_value=0, max_value=5, value=int(s["f_s2"]), key="f_s2_input")
+
+        # 頒獎台
+        if s["f_s1"] > 0 or s["f_s2"] > 0:
+            st.write("---")
+            st.balloons()
+            st.header("🎉 👑 第一屆 戰鬥陀螺 BX 大賽 最終榮譽榜 👑 🎉")
+            champion = sf1_winner if s["f_s1"] > s["f_s2"] else sf2_winner
+            second_place = sf2_winner if s["f_s1"] > s["f_s2"] else sf1_winner
+            third_place = sf1_loser if s["bm_s1"] > s["bm_s2"] else sf2_loser
+            
+            c1, c2, c3 = st.columns(3)
+            c1.metric("🥇 總冠軍 (金牌)", champion)
+            c2.metric("🥈 亞軍 (銀牌)", second_place)
+            c3.metric("🥉 季軍 (銅牌)", third_place)
+            save_scores()
