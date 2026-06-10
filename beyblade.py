@@ -29,8 +29,20 @@ def save_data(df):
 df_registrations = load_data()
 
 st.title("🌀 戰鬥陀螺大賽零件登記系統")
-st.markdown("### 📝 規則提示：每人需登記 4 顆陀螺")
-st.markdown("⚠️ **核心限制：4 顆陀螺的「固鎖」與「軸心」皆絕對不能重複！**")
+
+# ════════════════════════════════════════════════════════════
+# 📋 大賽最新規則公告區
+# ════════════════════════════════════════════════════════════
+st.markdown("""
+### 📝 大賽核心規則與限制
+1. **每人需登記 4 顆陀螺**，且 4 顆的**「固鎖」與「軸心」皆絕對不能重複**！
+2. **🚫 大賽禁用零件（禁卡表）：**
+   * **上蓋禁用：`天馬 (Pegasus)`、`神杖 (Rod)`、`鯊魚 (Shark)`**
+3. **⚔️ 4 選 3 戰鬥守則：**
+   * 每場對決開始前，從登記的 4 顆中**秘密挑選 3 顆**排定出賽順序。
+   * **【重點】同一場比賽選定後，中途絕對不可更換陀螺或調整順序！**
+   * 下一場對決換新對手時，才可以重新從 4 顆中挑選 3 顆重新排陣。
+""")
 st.write("---")
 
 # 填寫表單
@@ -58,7 +70,7 @@ with st.form("registration_form", clear_on_submit=False):
         bit2 = st.text_input("第二顆 軸心 ⚠️", key="bit2", placeholder="例：Orb")
         
         st.subheader("【第四顆】")
-        b4 = st.text_input("第四顆 上蓋", key="b4", placeholder="例：Wizard Rod")
+        b4 = st.text_input("第四顆 上蓋", key="b4", placeholder="例：Cobalt Dragoon")
         r4 = st.text_input("第四顆 固鎖 ⚠️", key="r4", placeholder="例：5-70")
         bit4 = st.text_input("第四顆 軸心 ⚠️", key="bit4", placeholder="例：Hexa")
 
@@ -67,12 +79,23 @@ with st.form("registration_form", clear_on_submit=False):
 
 # 表單提交邏輯與規則檢查
 if submit_btn:
+    # 檢查禁卡表
+    b1_clean = b1.strip().lower()
+    b2_clean = b2.strip().lower()
+    b3_clean = b3.strip().lower()
+    b4_clean = b4.strip().lower()
+    
+    ban_keywords = ["pegasus", "天馬", "rod", "神杖", "shark", "鯊魚"]
+    has_banned_part = any(any(kw in b for kw in ban_keywords) for b in [b1_clean, b2_clean, b3_clean, b4_clean])
+
     if not player_name.strip():
         st.error("❌ 請輸入選手名稱！")
     elif player_name.strip() in df_registrations["選手名稱"].values:
         st.error(f"❌ 選手 「{player_name}」 已經登記過囉！若要修改請聯絡主辦人。")
     elif not all([b1, r1, bit1, b2, r2, bit2, b3, r3, bit3, b4, r4, bit4]):
         st.error("❌ 所有陀螺的零件欄位都必須填寫完整！")
+    elif has_banned_part:
+        st.error("❌ 登記失敗！您的配置中包含本次大賽的【禁用上蓋】（天馬 / 神杖 / 鯊魚），請修改後再送出！")
     else:
         # 將輸入整理並統一轉小寫，避免因大小寫或空格判定不同
         ratchets_list = [r1.strip().lower(), r2.strip().lower(), r3.strip().lower(), r4.strip().lower()]
@@ -93,7 +116,7 @@ if submit_btn:
             new_data = {
                 "選手名稱": player_name.strip(),
                 "陀螺1_上蓋": b1.strip(), "陀螺1_固鎖": r1.strip(), "陀螺1_軸心": bit1.strip(),
-                "陀螺2_上蓋": b2.strip(), "陀螺2_固鎖": r2.strip(), "陀螺2_軸心": bit2.strip(),
+                "陀rew2_上蓋": b2.strip(), "陀螺2_固鎖": r2.strip(), "陀螺2_軸心": bit2.strip(),
                 "陀螺3_上蓋": b3.strip(), "陀螺3_固鎖": r3.strip(), "陀螺3_軸心": bit3.strip(),
                 "陀螺4_上蓋": b4.strip(), "陀螺4_固鎖": r4.strip(), "陀螺4_軸心": bit4.strip(),
             }
@@ -101,7 +124,7 @@ if submit_btn:
             
             try:
                 save_data(df_registrations)
-                st.success(f"🎉 恭喜 【{player_name}】 成功登記！4 顆陀螺的固鎖與軸心均符合不重複規則。")
+                st.success(f"🎉 恭喜 【{player_name}】 成功登記！零件與禁用限制檢查完全合格。")
                 st.rerun()
             except PermissionError:
                 st.error("❌ 儲存失敗！主辦人可能正用 Excel 開啟 `beyblade_registrations.csv`，請請主辦人關閉 Excel 後再試一次。")
