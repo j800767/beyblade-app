@@ -5,8 +5,17 @@ import os
 # 設定網頁標題與風格
 st.set_page_config(page_title="戰鬥陀螺大賽登記系統", page_icon="🌀", layout="centered")
 
+# ════════════════════════════════════════════════════════════
+# 🚀 內建強制導覽選單（防止 Streamlit 側邊欄抓不到 pages 資料夾）
+# ════════════════════════════════════════════════════════════
+with st.sidebar:
+    st.title("📌 大賽系統選單")
+    st.info("💡 如果左側沒有自動出現分頁連結，請點擊下方按鈕切換：")
+    st.markdown("[👉 前往【主辦人計分控制台】](https://share.streamlit.io/j800767/beyblade-app/main/pages/tournament.py)", unsafe_url=True)
+    st.write("---")
+
 DATA_FILE = "beyblade_registrations.csv"
-ADMIN_PASSWORD = "admin"  # 👈 主辦人管理密碼（目前設定為 admin，可隨時修改）
+ADMIN_PASSWORD = "admin"  # 👈 主辦人管理密碼
 
 # 讀取現有資料
 def load_data():
@@ -30,9 +39,7 @@ df_registrations = load_data()
 
 st.title("🌀 戰鬥陀螺大賽零件登記系統")
 
-# ════════════════════════════════════════════════════════════
 # 📋 大賽最新規則公告區
-# ════════════════════════════════════════════════════════════
 st.markdown("""
 ### 📝 大賽核心規則與限制
 1. **每人需登記 4 顆陀螺**，且 4 顆的**「固鎖」與「軸心」皆絕對不能重複**！
@@ -79,7 +86,6 @@ with st.form("registration_form", clear_on_submit=False):
 
 # 表單提交邏輯與規則檢查
 if submit_btn:
-    # 檢查禁卡表
     b1_clean = b1.strip().lower()
     b2_clean = b2.strip().lower()
     b3_clean = b3.strip().lower()
@@ -97,11 +103,9 @@ if submit_btn:
     elif has_banned_part:
         st.error("❌ 登記失敗！您的配置中包含本次大賽的【禁用上蓋】（天馬 / 神杖 / 鯊魚），請修改後再送出！")
     else:
-        # 將輸入整理並統一轉小寫，避免因大小寫或空格判定不同
         ratchets_list = [r1.strip().lower(), r2.strip().lower(), r3.strip().lower(), r4.strip().lower()]
         bits_list = [bit1.strip().lower(), bit2.strip().lower(), bit3.strip().lower(), bit4.strip().lower()]
         
-        # 檢查重複
         has_duplicate_ratchet = len(set(ratchets_list)) < 4
         has_duplicate_bit = len(set(bits_list)) < 4
         
@@ -112,11 +116,10 @@ if submit_btn:
         elif has_duplicate_bit:
             st.error("❌ 違反參賽規則：您的 4 顆陀螺中，有**重複的軸心**！請重新調整。")
         else:
-            # 檢查完全通過，寫入資料
             new_data = {
                 "選手名稱": player_name.strip(),
                 "陀螺1_上蓋": b1.strip(), "陀螺1_固鎖": r1.strip(), "陀螺1_軸心": bit1.strip(),
-                "陀rew2_上蓋": b2.strip(), "陀螺2_固鎖": r2.strip(), "陀螺2_軸心": bit2.strip(),
+                "陀螺2_上蓋": b2.strip(), "陀螺2_固鎖": r2.strip(), "陀螺2_軸心": bit2.strip(),
                 "陀螺3_上蓋": b3.strip(), "陀螺3_固鎖": r3.strip(), "陀螺3_軸心": bit3.strip(),
                 "陀螺4_上蓋": b4.strip(), "陀螺4_固鎖": r4.strip(), "陀螺4_軸心": bit4.strip(),
             }
@@ -144,14 +147,11 @@ if not df_registrations.empty:
         mime="text/csv"
     )
     
-    # 🔐 主辦人刪改管理專區
-    st.write("---")
     with st.expander("🛠️ 主辦人資料管理專區"):
         pwd = st.text_input("請輸入管理密碼", type="password")
         if pwd == ADMIN_PASSWORD:
             st.success("密碼正確！已開啟管理權限")
             
-            # 刪除功能
             player_to_delete = st.selectbox("請選擇要刪除資料的選手：", ["-- 請選擇 --"] + list(df_registrations["選手名稱"].values))
             if player_to_delete != "-- 請選擇 --":
                 if st.button(f"🗑️ 確定刪除 {player_to_delete} 的登記資料", type="primary"):
