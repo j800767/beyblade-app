@@ -39,7 +39,19 @@ df_registrations = load_data()
 tab1, tab2 = st.tabs(["📝 選手零件登記表單", "🏆 大賽即時榜與控制台"])
 
 # ════════════════════════════════════════════════════════════
-# 【分頁一：選手登記系統】—— ⚠️ 全面開放，供所有人登記
+# 🔒 側邊欄密碼驗證區（影響全網頁的權限）
+# ════════════════════════════════════════════════════════════
+st.sidebar.header("🔑 管理者驗證專區")
+admin_input = st.sidebar.text_input("輸入管理密碼以鎖定/解鎖控制項", type="password", help="請輸入主辦人密碼以開啟計分、刪除與抽籤權限")
+is_admin = (admin_input == ADMIN_PASSWORD)
+
+if is_admin:
+    st.sidebar.success("🔓 驗證成功！管理員操作權限已全開。")
+else:
+    st.sidebar.info("🔒 目前為【訪客唯讀模式】。若您是主辦人，請輸入密碼以進行計分、刪除資料或抽籤。")
+
+# ════════════════════════════════════════════════════════════
+# 【分頁一：選手登記系統】—— ⚠️ 補回安全版刪除功能
 # ════════════════════════════════════════════════════════════
 with tab1:
     st.title("🌀 戰鬥陀螺大賽零件登記系統")
@@ -70,7 +82,7 @@ with tab1:
             st.subheader("【第三顆】")
             b3 = st.text_input("第三顆 上蓋", key="b3", placeholder="例：Hells Chain")
             r3 = st.text_input("第三顆 固鎖 ⚠️", key="r3", placeholder="例：5-60")
-            bit3 = st.text_input("第三顆 軸心 ⚠️", key="bit3", placeholder="例 mold：High Taper")
+            bit3 = st.text_input("第三顆 軸心 ⚠️", key="bit3", placeholder="例：High Taper")
 
         with col2:
             st.subheader("【第二顆】")
@@ -129,11 +141,24 @@ with tab1:
     st.subheader("📊 目前已登記名單")
     if not df_registrations.empty:
         st.dataframe(df_registrations)
+        
+        # 🗑️ 重新補回：主辦人專用選手資料管理區（受左側密碼鎖控制）
+        st.write("---")
+        if is_admin:
+            with st.expander("🛠️ 主辦人資料管理專區（已解鎖）", expanded=True):
+                player_to_delete = st.selectbox("請選擇要刪除資料的選手：", ["-- 請選擇 --"] + list(df_registrations["選手名稱"].values))
+                if player_to_delete != "-- 請選擇 --" and st.button(f"🗑️ 確定從大賽刪除 {player_to_delete}", type="primary"):
+                    df_registrations = df_registrations[df_registrations["選手名稱"] != player_to_delete]
+                    save_data(df_registrations)
+                    st.success(f"已成功將 【{player_to_delete}】 移出登記名單！")
+                    st.rerun()
+        else:
+            st.caption("💡 提示：若輸入錯誤欲刪除或修改登記資料，請洽現場大賽主辦人解鎖權限。")
     else:
         st.info("💡 目前還沒有選手登記喔！")
 
 # ════════════════════════════════════════════════════════════
-# 【分頁二：主辦人計分與晉級控制台】—— 🔒 核心操作加入密碼鎖
+# 【分頁二：主辦人計分與晉級控制台】
 # ════════════════════════════════════════════════════════════
 with tab2:
     st.title("🏆 大賽計分與全自動晉級控制台")
@@ -165,17 +190,9 @@ with tab2:
     def save_scores():
         pd.DataFrame([s]).to_csv(SCORE_FILE, index=False)
 
-    # ════════════════════════════════════════════════════════════
-    # 🔒 側邊欄密碼驗證區
-    # ════════════════════════════════════════════════════════════
-    st.sidebar.header("🔑 管理者驗證專區")
-    admin_input = st.sidebar.text_input("輸入管理密碼以鎖定/解鎖控制項", type="password", help="請輸入主辦人密碼以開啟計分與抽籤權限")
-    is_admin = (admin_input == ADMIN_PASSWORD)
-
+    # 🔑 管理者在側邊欄可以使用的加強型控制功能
     if is_admin:
-        st.sidebar.success("🔓 驗證成功！控制台權限已完全開啟。")
-        
-        # 🎲 自動抽籤功能 (僅限管理者)
+        # 🎲 自動抽籤功能
         st.sidebar.write("---")
         st.sidebar.subheader("🎲 現場分組抽籤系統")
         if st.sidebar.button("💥 開始現場隨機抽籤！", type="primary"):
@@ -186,10 +203,10 @@ with tab2:
             s["A1"], s["A2"], s["A3"] = pool[0], pool[1], pool[2]
             s["B1"], s["B2"], s["B3"] = pool[3], pool[4], pool[5]
             save_scores()
-            st.sidebar.success("🎉 抽籤完成！")
+            st.sidebar.success("🎉 抽籤完成！名單已更新！")
             st.rerun()
 
-        # ✍️ 手動調整選單 (僅限管理者)
+        # ✍️ 手動調整選單
         st.sidebar.write("---")
         st.sidebar.subheader("✍️ 手動微調選單")
         for key in ["A1", "A2", "A3", "B1", "B2", "B3"]:
@@ -209,14 +226,8 @@ with tab2:
             if os.path.exists(DATA_FILE): os.remove(DATA_FILE)
             if "scores" in st.session_state: del st.session_state.scores
             st.rerun()
-    else:
-        st.sidebar.info("🔒 目前為【訪客唯讀模式】。若您是主辦人，請輸入密碼以進行計分、刪除資料或抽籤。")
 
-    # ════════════════════════════════════════════════════════════
-    # 📍 大賽進度渲染 (依據 is_admin 決定是否允許修改 number_input)
-    # ════════════════════════════════════════════════════════════
-    
-    # 計算小組排名
+    # 計算與顯示戰果
     def get_rank(p1, p2, p3, m1_1, m1_2, m2_1, m2_2, m3_1, m3_2):
         stats = {p1: {"wins": 0, "diff": 0}, p2: {"wins": 0, "diff": 0}, p3: {"wins": 0, "diff": 0}}
         if m1_1 > m1_2: stats[p1]["wins"]+=1
