@@ -51,7 +51,7 @@ else:
     st.sidebar.info("🔒 目前為【訪客唯讀模式】。若您是主辦人，請輸入密碼以進行計分、刪除資料或抽籤。")
 
 # ════════════════════════════════════════════════════════════
-# 【分頁一：選手登記系統】—— ⚠️ 補回安全版刪除功能
+# 【分頁一：選手登記系統】
 # ════════════════════════════════════════════════════════════
 with tab1:
     st.title("🌀 戰鬥陀螺大賽零件登記系統")
@@ -142,8 +142,6 @@ with tab1:
     if not df_registrations.empty:
         st.dataframe(df_registrations)
         
-        # 🗑️ 重新補回：主辦人專用選手資料管理區（受左側密碼鎖控制）
-        st.write("---")
         if is_admin:
             with st.expander("🛠️ 主辦人資料管理專區（已解鎖）", expanded=True):
                 player_to_delete = st.selectbox("請選擇要刪除資料的選手：", ["-- 請選擇 --"] + list(df_registrations["選手名稱"].values))
@@ -190,7 +188,7 @@ with tab2:
     def save_scores():
         pd.DataFrame([s]).to_csv(SCORE_FILE, index=False)
 
-    # 🔑 管理者在側邊欄可以使用的加強型控制功能
+    # 🔑 管理者控制功能
     if is_admin:
         # 🎲 自動抽籤功能
         st.sidebar.write("---")
@@ -245,93 +243,93 @@ with tab2:
     rank_A = get_rank(s["A1"], s["A2"], s["A3"], s["m1_s1"], s["m1_s2"], s["m3_s1"], s["m3_s2"], s["m5_s1"], s["m5_s2"])
     rank_B = get_rank(s["B1"], s["B2"], s["B3"], s["m2_s1"], s["m2_s2"], s["m4_s1"], s["m4_s2"], s["m6_s1"], s["m6_s2"])
 
-    # 📍 第一階段：小組循環賽
+    # 📍 第一階段：小組循環賽 (max_value 已調至 6)
     st.header("📍 第一階段：小組循環賽 (常規賽 6 場)")
     col_a, col_b = st.columns(2)
     
     with col_a:
         st.subheader("🌀 A 組 (循環賽)")
         st.write(f"**【場次 1】** {s['A1']} vs {s['A2']}")
-        s["m1_s1"] = st.number_input(f"{s['A1']} 分數", min_value=0, max_value=5, value=int(s["m1_s1"]), key="m1_s1_input", disabled=not is_admin)
-        s["m1_s2"] = st.number_input(f"{s['A2']} 分數", min_value=0, max_value=5, value=int(s["m1_s2"]), key="m1_s2_input", disabled=not is_admin)
+        s["m1_s1"] = st.number_input(f"{s['A1']} 分數", min_value=0, max_value=6, value=int(s["m1_s1"]), key="m1_s1_input", disabled=not is_admin)
+        s["m1_s2"] = st.number_input(f"{s['A2']} 分數", min_value=0, max_value=6, value=int(s["m1_s2"]), key="m1_s2_input", disabled=not is_admin)
         
         st.write(f"**【場次 3】** {s['A2']} vs {s['A3']}")
-        s["m3_s1"] = st.number_input(f"{s['A2']} 分數 ", min_value=0, max_value=5, value=int(s["m3_s1"]), key="m3_s1_input", disabled=not is_admin)
-        s["m3_s2"] = st.number_input(f"{s['A3']} 分數 ", min_value=0, max_value=5, value=int(s["m3_s2"]), key="m3_s2_input", disabled=not is_admin)
+        s["m3_s1"] = st.number_input(f"{s['A2']} 分數 ", min_value=0, max_value=6, value=int(s["m3_s1"]), key="m3_s1_input", disabled=not is_admin)
+        s["m3_s2"] = st.number_input(f"{s['A3']} 分數 ", min_value=0, max_value=6, value=int(s["m3_s2"]), key="m3_s2_input", disabled=not is_admin)
         
         st.write(f"**【場次 5】** {s['A1']} vs {s['A3']}")
-        s["m5_s1"] = st.number_input(f"{s['A1']} 分數  ", min_value=0, max_value=5, value=int(s["m5_s1"]), key="m5_s1_input", disabled=not is_admin)
-        s["m5_s2"] = st.number_input(f"{s['A3']} 分數  ", min_value=0, max_value=5, value=int(s["m5_s2"]), key="m5_s2_input", disabled=not is_admin)
+        s["m5_s1"] = st.number_input(f"{s['A1']} 分數  ", min_value=0, max_value=6, value=int(s["m5_s1"]), key="m5_s1_input", disabled=not is_admin)
+        s["m5_s2"] = st.number_input(f"{s['A3']} 分數  ", min_value=0, max_value=6, value=int(s["m5_s2"]), key="m5_s2_input", disabled=not is_admin)
 
     with col_b:
         st.subheader("🌀 B 組 (循環賽)")
         st.write(f"**【場次 2】** {s['B1']} vs {s['B2']}")
-        s["m2_s1"] = st.number_input(f"{s['B1']} 分數", min_value=0, max_value=5, value=int(s["m2_s1"]), key="m2_s1_input", disabled=not is_admin)
-        s["m2_s2"] = st.number_input(f"{s['B2']} 分數", min_value=0, max_value=5, value=int(s["m2_s2"]), key="m2_s2_input", disabled=not is_admin)
+        s["m2_s1"] = st.number_input(f"{s['B1']} 分數", min_value=0, max_value=6, value=int(s["m2_s1"]), key="m2_s1_input", disabled=not is_admin)
+        s["m2_s2"] = st.number_input(f"{s['B2']} 分數", min_value=0, max_value=6, value=int(s["m2_s2"]), key="m2_s2_input", disabled=not is_admin)
         
         st.write(f"**【場次 4】** {s['B2']} vs {s['B3']}")
-        s["m4_s1"] = st.number_input(f"{s['B2']} 分數 ", min_value=0, max_value=5, value=int(s["m4_s1"]), key="m4_s1_input", disabled=not is_admin)
-        s["m4_s2"] = st.number_input(f"{s['B3']} 分數 ", min_value=0, max_value=5, value=int(s["m4_s2"]), key="m4_s2_input", disabled=not is_admin)
+        s["m4_s1"] = st.number_input(f"{s['B2']} 分數 ", min_value=0, max_value=6, value=int(s["m4_s1"]), key="m4_s1_input", disabled=not is_admin)
+        s["m4_s2"] = st.number_input(f"{s['B3']} 分數 ", min_value=0, max_value=6, value=int(s["m4_s2"]), key="m4_s2_input", disabled=not is_admin)
         
         st.write(f"**【場次 6】** {s['B1']} vs {s['B3']}")
-        s["m6_s1"] = st.number_input(f"{s['B1']} 分數   ", min_value=0, max_value=5, value=int(s["m6_s1"]), key="m6_s1_input", disabled=not is_admin)
-        s["m6_s2"] = st.number_input(f"{s['B3']} 分數   ", min_value=0, max_value=5, value=int(s["m6_s2"]), key="m6_s2_input", disabled=not is_admin)
+        s["m6_s1"] = st.number_input(f"{s['B1']} 分數   ", min_value=0, max_value=6, value=int(s["m6_s1"]), key="m6_s1_input", disabled=not is_admin)
+        s["m6_s2"] = st.number_input(f"{s['B3']} 分數   ", min_value=0, max_value=6, value=int(s["m6_s2"]), key="m6_s2_input", disabled=not is_admin)
 
     st.write("---")
     st.subheader("📊 目前小組排名預覽")
     st.info(f"**🥇 A組第一 (直升四強):** {rank_A[0]} | 🥈 第二: {rank_A[1]} | 🥉 第三: {rank_A[2]}")
     st.info(f"**🥇 B組第一 (直升四強):** {rank_B[0]} | 🥈 第二: {rank_B[1]} | 🥉 第三: {rank_B[2]}")
 
-    # 📍 第二階段：敗部復活挑戰賽
+    # 📍 第二階段：敗部復活挑戰賽 (max_value 已調至 6)
     st.write("---")
     st.header("🔥 第二階段：敗部復活挑戰賽")
     col_r1, col_r2 = st.columns(2)
     with col_r1:
         st.subheader("⚔️ 敗部戰 1")
         st.write(f"**A組第二** `{rank_A[1]}` vs **B組第三** `{rank_B[2]}`")
-        s["r1_s1"] = st.number_input(f"{rank_A[1]} 敗部分1", min_value=0, max_value=5, value=int(s["r1_s1"]), key="r1_s1_input", disabled=not is_admin)
-        s["r1_s2"] = st.number_input(f"{rank_B[2]} 敗部分2", min_value=0, max_value=5, value=int(s["r1_s2"]), key="r1_s2_input", disabled=not is_admin)
+        s["r1_s1"] = st.number_input(f"{rank_A[1]} 敗部分1", min_value=0, max_value=6, value=int(s["r1_s1"]), key="r1_s1_input", disabled=not is_admin)
+        s["r1_s2"] = st.number_input(f"{rank_B[2]} 敗部分2", min_value=0, max_value=6, value=int(s["r1_s2"]), key="r1_s2_input", disabled=not is_admin)
         r1_winner = rank_A[1] if s["r1_s1"] > s["r1_s2"] else rank_B[2]
     with col_r2:
         st.subheader("⚔️ 敗部戰 2")
         st.write(f"**B組第二** `{rank_B[1]}` vs **A組第三** `{rank_A[2]}`")
-        s["r2_s1"] = st.number_input(f"{rank_B[1]} 敗部分3", min_value=0, max_value=5, value=int(s["r2_s1"]), key="r2_s1_input", disabled=not is_admin)
-        s["r2_s2"] = st.number_input(f"{rank_A[2]} 敗部分4", min_value=0, max_value=5, value=int(s["r2_s2"]), key="r2_s2_input", disabled=not is_admin)
+        s["r2_s1"] = st.number_input(f"{rank_B[1]} 敗部分3", min_value=0, max_value=6, value=int(s["r2_s1"]), key="r2_s1_input", disabled=not is_admin)
+        s["r2_s2"] = st.number_input(f"{rank_A[2]} 敗部分4", min_value=0, max_value=6, value=int(s["r2_s2"]), key="r2_s2_input", disabled=not is_admin)
         r2_winner = rank_B[1] if s["r2_s1"] > s["r2_s2"] else rank_A[2]
 
-    # 📍 第三階段：四強賽
+    # 📍 第三階段：四強賽 (max_value 已調至 6)
     st.write("---")
     st.header("👑 第三階段：真正核心四強賽")
     col_sf1, col_sf2 = st.columns(2)
     with col_sf1:
         st.subheader("🏆 四強賽 A")
         st.write(f"**A組第一** `{rank_A[0]}` vs **敗部戰 2 勝者** `{r2_winner}`")
-        s["sf1_s1"] = st.number_input(f"{rank_A[0]} 四強分1", min_value=0, max_value=5, value=int(s["sf1_s1"]), key="sf1_s1_input", disabled=not is_admin)
-        s["sf1_s2"] = st.number_input(f"{r2_winner} 四強分2", min_value=0, max_value=5, value=int(s["sf1_s2"]), key="sf1_s2_input", disabled=not is_admin)
+        s["sf1_s1"] = st.number_input(f"{rank_A[0]} 四強分1", min_value=0, max_value=6, value=int(s["sf1_s1"]), key="sf1_s1_input", disabled=not is_admin)
+        s["sf1_s2"] = st.number_input(f"{r2_winner} 四強分2", min_value=0, max_value=6, value=int(s["sf1_s2"]), key="sf1_s2_input", disabled=not is_admin)
         sf1_winner = rank_A[0] if s["sf1_s1"] > s["sf1_s2"] else r2_winner
         sf1_loser = r2_winner if s["sf1_s1"] > s["sf1_s2"] else rank_A[0]
     with col_sf2:
         st.subheader("🏆 四強賽 B")
         st.write(f"**B組第一** `{rank_B[0]}` vs **敗部戰 1 勝者** `{r1_winner}`")
-        s["sf2_s1"] = st.number_input(f"{rank_B[0]} 四強分3", min_value=0, max_value=5, value=int(s["sf2_s1"]), key="sf2_s1_input", disabled=not is_admin)
-        s["sf2_s2"] = st.number_input(f"{r1_winner} 四強分4", min_value=0, max_value=5, value=int(s["sf2_s2"]), key="sf2_s2_input", disabled=not is_admin)
+        s["sf2_s1"] = st.number_input(f"{rank_B[0]} 四強分3", min_value=0, max_value=6, value=int(s["sf2_s1"]), key="sf2_s1_input", disabled=not is_admin)
+        s["sf2_s2"] = st.number_input(f"{r1_winner} 四強分4", min_value=0, max_value=6, value=int(s["sf2_s2"]), key="sf2_s2_input", disabled=not is_admin)
         sf2_winner = rank_B[0] if s["sf2_s1"] > s["sf2_s2"] else r1_winner
         sf2_loser = r1_winner if s["sf2_s1"] > s["sf2_s2"] else rank_B[0]
 
-    # 📍 第四階段：決賽圈
+    # 📍 第四階段：決賽圈 (max_value 已調至 6)
     st.write("---")
     st.header("✨ 第四階段：榮譽決賽圈")
     col_bm, col_f = st.columns(2)
     with col_bm:
         st.subheader("🥉 季軍賽 (銅牌戰)")
         st.write(f"`{sf1_loser}` vs `{sf2_loser}`")
-        s["bm_s1"] = st.number_input(f"{sf1_loser} 決賽分1", min_value=0, max_value=5, value=int(s["bm_s1"]), key="bm_s1_input", disabled=not is_admin)
-        s["bm_s2"] = st.number_input(f"{sf2_loser} 決賽分2", min_value=0, max_value=5, value=int(s["bm_s2"]), key="bm_s2_input", disabled=not is_admin)
+        s["bm_s1"] = st.number_input(f"{sf1_loser} 決賽分1", min_value=0, max_value=6, value=int(s["bm_s1"]), key="bm_s1_input", disabled=not is_admin)
+        s["bm_s2"] = st.number_input(f"{sf2_loser} 決賽分2", min_value=0, max_value=6, value=int(s["bm_s2"]), key="bm_s2_input", disabled=not is_admin)
     with col_f:
         st.subheader("🥇 🚀 總冠軍賽 (金牌戰)")
         st.write(f"👑 `{sf1_winner}` vs 👑 `{sf2_winner}`")
-        s["f_s1"] = st.number_input(f"{sf1_winner} 決賽分3", min_value=0, max_value=5, value=int(s["f_s1"]), key="f_s1_input", disabled=not is_admin)
-        s["f_s2"] = st.number_input(f"{sf2_winner} 決賽分4", min_value=0, max_value=5, value=int(s["f_s2"]), key="f_s2_input", disabled=not is_admin)
+        s["f_s1"] = st.number_input(f"{sf1_winner} 決賽分3", min_value=0, max_value=6, value=int(s["f_s1"]), key="f_s1_input", disabled=not is_admin)
+        s["f_s2"] = st.number_input(f"{sf2_winner} 決賽分4", min_value=0, max_value=6, value=int(s["f_s2"]), key="f_s2_input", disabled=not is_admin)
 
     # 儲存每一步的比分狀態
     if is_admin:
