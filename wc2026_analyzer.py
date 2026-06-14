@@ -20,15 +20,15 @@ from openpyxl.utils import get_column_letter
 
 class WC2026BettingAnalyzer:
     def __init__(self):
-        # 🏆 48國官方戰力權重矩陣
+        # 🏆 48國官方戰力權重矩陣（已新增庫拉索，並修正哥倫比亞錯字）
         self.power_index = {
             "法國": 94.2, "阿根廷": 93.8, "西班牙": 93.5, "英格蘭": 92.8, "葡萄牙": 91.5,
             "德國": 90.8, "荷蘭": 89.5, "義大利": 88.2, "比利時": 87.5, "克羅埃西亞": 86.0,
             "瑞士": 83.5, "丹麥": 82.8, "土耳其": 82.0, "烏克蘭": 80.5, "捷克": 79.5, "波赫": 76.5,
-            "巴西": 94.5, "烏拉圭": 89.0, "哥聯比亞": 87.2, "厄瓜多": 82.5, "巴拉圭": 78.0, "秘魯": 76.0,
+            "巴西": 94.5, "烏拉圭": 89.0, "哥倫比亞": 87.2, "厄瓜多": 82.5, "巴拉圭": 78.0, "秘魯": 76.0,
             "美國": 85.5, "墨西哥": 84.0, "加拿大": 78.8, "哥斯大黎加": 77.2, "牙買加": 75.8, "巴拿馬": 75.0,
-            "摩洛哥": 86.8, "塞內加爾": 84.2, "奈及利亞": 81.5, "突尼西亞": 78.2, "阿爾及利亞": 78.0, 
-            "埃及": 79.0, "喀麥隆": 77.5, "馬利": 74.8, "南非": 74.0,
+            "庫拉索": 73.5, "摩洛哥": 86.8, "塞內加爾": 84.2, "奈及利亞": 81.5, "突尼西亞": 78.2, 
+            "阿爾及利亞": 78.0, "埃及": 79.0, "喀麥隆": 77.5, "馬利": 74.8, "南非": 74.0,
             "日本": 84.8, "伊朗": 81.8, "南韓": 81.5, "澳洲": 80.2, "沙烏地阿拉伯": 77.0, 
             "卡達": 75.0, "烏茲別克": 74.5, "伊拉克": 73.8, "阿聯": 72.5, "紐西蘭": 71.0,
             "海地": 68.5, "蘇格蘭": 78.5
@@ -59,26 +59,21 @@ class WC2026BettingAnalyzer:
         }
 
     def predict_exact_scores(self, home_team: str, away_team: str, home_xg: float, away_xg: float) -> list:
-        """
-        修正核心：計算比分機率時，自動將 1:0、2:1 翻譯成具體的「球隊勝負比分」文字
-        """
         max_goals = 5
         score_probs = []
         for h in range(max_goals):
             for a in range(max_goals):
                 prob = poisson.pmf(h, home_xg) * poisson.pmf(a, away_xg)
                 
-                # 動態組合清晰的運彩名稱
                 if h > a:
-                    score_text = f"{home_team} {h}:{a}"  # 主隊贏
+                    score_text = f"{home_team} {h}:{a}"
                 elif a > h:
-                    score_text = f"{away_team} {a}:{h}"  # 客隊贏（依照台灣運彩習慣，勝隊分數在前）
+                    score_text = f"{away_team} {a}:{h}"  # 依台灣運彩習慣，勝隊分數在前
                 else:
-                    score_text = f"和局 {h}:{a}"       # 和局
+                    score_text = f"和局 {h}:{a}"
                     
                 score_probs.append((score_text, round(prob * 100, 2)))
                 
-        # 依機率高低排序，取出前 3 高熱門正比
         score_probs.sort(key=lambda x: x[1], reverse=True)
         return score_probs[:3]
 
@@ -103,7 +98,7 @@ class WC2026BettingAnalyzer:
             "資金與核心預測": f"依據實力模型，本場推薦投注【{home_team if best_pick == '主勝' else away_team if best_pick == '客勝' else '和局'}】。"
         })
         
-        # 2. 正確比分 (關鍵修正處)
+        # 2. 正確比分
         top_scores = self.predict_exact_scores(home_team, away_team, home_xg, away_xg)
         score_desc = ", ".join([f"【{s}】({p}%)" for s, p in top_scores])
         
@@ -258,7 +253,7 @@ else:
     st.write("### 🎯 台灣運彩最佳投注決策建議")
     st.dataframe(df_result, use_container_width=True)
     
-    # 图表呈現
+    # 圖表呈現
     st.write("### 📈 大數據模型不讓分 (1X2) 勝率機率分佈")
     prob_df = pd.DataFrame({
         "機率 (%)": [
