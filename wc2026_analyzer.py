@@ -20,12 +20,12 @@ from openpyxl.utils import get_column_letter
 
 class WC2026BettingAnalyzer:
     def __init__(self):
-        # 🏆 48國官方戰力權重矩陣（基準分：100為滿分頂點）
+        # 🏆 48國官方戰力權重矩陣
         self.power_index = {
             "法國": 94.2, "阿根廷": 93.8, "西班牙": 93.5, "英格蘭": 92.8, "葡萄牙": 91.5,
             "德國": 90.8, "荷蘭": 89.5, "義大利": 88.2, "比利時": 87.5, "克羅埃西亞": 86.0,
             "瑞士": 83.5, "丹麥": 82.8, "土耳其": 82.0, "烏克蘭": 80.5, "捷克": 79.5, "波赫": 76.5,
-            "巴西": 94.5, "烏拉圭": 89.0, "哥倫比亞": 87.2, "厄瓜多": 82.5, "巴拉圭": 78.0, "秘魯": 76.0,
+            "巴西": 94.5, "烏拉圭": 89.0, "哥聯比亞": 87.2, "厄瓜多": 82.5, "巴拉圭": 78.0, "秘魯": 76.0,
             "美國": 85.5, "墨西哥": 84.0, "加拿大": 78.8, "哥斯大黎加": 77.2, "牙買加": 75.8, "巴拿馬": 75.0,
             "摩洛哥": 86.8, "塞內加爾": 84.2, "奈及利亞": 81.5, "突尼西亞": 78.2, "阿爾及利亞": 78.0, 
             "埃及": 79.0, "喀麥隆": 77.5, "馬利": 74.8, "南非": 74.0,
@@ -38,7 +38,6 @@ class WC2026BettingAnalyzer:
         h_idx = self.power_index.get(home_team, 80.0)
         a_idx = self.power_index.get(away_team, 80.0)
         
-        # 計算兩隊預期進球率 (xG)
         home_xg = round((h_idx / a_idx) * 1.45, 2)
         away_xg = round((a_idx / h_idx) * 1.15, 2)
         
@@ -59,13 +58,27 @@ class WC2026BettingAnalyzer:
             "prob_1X2": {"主勝": prob_home, "和局": prob_draw, "客勝": prob_away}
         }
 
-    def predict_exact_scores(self, home_xg: float, away_xg: float) -> list:
+    def predict_exact_scores(self, home_team: str, away_team: str, home_xg: float, away_xg: float) -> list:
+        """
+        修正核心：計算比分機率時，自動將 1:0、2:1 翻譯成具體的「球隊勝負比分」文字
+        """
         max_goals = 5
         score_probs = []
         for h in range(max_goals):
             for a in range(max_goals):
                 prob = poisson.pmf(h, home_xg) * poisson.pmf(a, away_xg)
-                score_probs.append((f"{h}:{a}", round(prob * 100, 2)))
+                
+                # 動態組合清晰的運彩名稱
+                if h > a:
+                    score_text = f"{home_team} {h}:{a}"  # 主隊贏
+                elif a > h:
+                    score_text = f"{away_team} {a}:{h}"  # 客隊贏（依照台灣運彩習慣，勝隊分數在前）
+                else:
+                    score_text = f"和局 {h}:{a}"       # 和局
+                    
+                score_probs.append((score_text, round(prob * 100, 2)))
+                
+        # 依機率高低排序，取出前 3 高熱門正比
         score_probs.sort(key=lambda x: x[1], reverse=True)
         return score_probs[:3]
 
@@ -74,36 +87,42 @@ class WC2026BettingAnalyzer:
         odds = match_data["odds_1X2"]
         home_xg = match_data["home_xg"]
         away_xg = match_data["away_xg"]
+        home_team = match_data["home"]
+        away_team = match_data["away"]
         predicted_goals = home_xg + away_xg
         
         strategies = []
         best_pick = max(probs, key=probs.get)
         
+        # 1. 不讓分
         strategies.append({
             "玩法分類": "不讓分 (1X2)",
-            "推薦投注": f"{match_data['home'] if best_pick == '主勝' else match_data['away'] if best_pick == '客勝' else '和局'} ({best_pick})",
+            "推薦投注": f"{home_team if best_pick == '主勝' else away_team if best_pick == '客勝' else '和局'} ({best_pick})",
             "運彩參考賠率": odds[best_pick],
             "模型預估勝率": f"{round(probs[best_pick]*100, 1)}%",
-            "資金與核心預測": "依大數據實力模型推薦，建議進行資產配置投注。"
+            "資金與核心預測": f"依據實力模型，本場推薦投注【{home_team if best_pick == '主勝' else away_team if best_pick == '客勝' else '和局'}】。"
         })
         
-        top_scores = self.predict_exact_scores(home_xg, away_xg)
+        # 2. 正確比分 (關鍵修正處)
+        top_scores = self.predict_exact_scores(home_team, away_team, home_xg, away_xg)
         score_desc = ", ".join([f"【{s}】({p}%)" for s, p in top_scores])
+        
         strategies.append({
             "玩法分類": "正確比分 (波膽)",
             "推薦投注": f"首選 {top_scores[0][0]} / 次選 {top_scores[1][0]}",
             "運彩參考賠率": "依現場盤口為準",
             "模型預估勝率": f"{round(sum([p for s, p in top_scores]), 1)}%",
-            "資金與核心預測": f"熱門正比機率：{score_desc}。"
+            "資金與核心預測": f"熱門正比精算機率排名：{score_desc}。"
         })
         
+        # 3. 大小分
         ou_pick = "大分" if predicted_goals >= 2.5 else "小分"
         strategies.append({
             "玩法分類": "大小分 (2.5)",
             "推薦投注": f"{ou_pick}",
             "運彩參考賠率": 1.80,
             "模型預估勝率": "59.2%" if ou_pick == "小分" else "56.4%",
-            "資金與核心預測": f"預期全場總進球約 {round(predicted_goals, 2)} 球。走勢偏向{ou_pick}。"
+            "資金與核心預測": f"預期全場總進球約 {round(predicted_goals, 2)} 球。數據走勢偏向{ou_pick}。"
         })
         
         return pd.DataFrame(strategies)
@@ -165,7 +184,7 @@ class WC2026BettingAnalyzer:
         return output.getvalue()
 
 # ==========================================
-# 🖥️ Streamlit 網頁前端渲染 (實力差距量化版)
+# 🖥️ Streamlit 網頁前端渲染
 # ==========================================
 analyzer = WC2026BettingAnalyzer()
 teams_list = sorted(list(analyzer.power_index.keys()))
@@ -182,39 +201,33 @@ away_select = st.sidebar.selectbox("請選擇 客隊 (Away)", teams_list, index=
 if home_select == away_select:
     st.error("❌ 錯誤：主客隊不能選擇相同國家，請重新配置對戰組合。")
 else:
-    # 執行數據精算
+    # 進行數據精算
     match_data = analyzer.fetch_live_odds(home_select, away_select)
     df_result = analyzer.analyze_betting_strategy(match_data)
     
-    # 🧮 核心亮點：計算兩隊戰力差距與指標
+    # 計算兩隊戰力差距
     h_pwr = analyzer.power_index.get(home_select, 80.0)
     a_pwr = analyzer.power_index.get(away_select, 80.0)
     
-    # 轉化為百分比權重分佈
     total_pwr = h_pwr + a_pwr
     h_share = round((h_pwr / total_pwr) * 100, 1)
     a_share = round((a_pwr / total_pwr) * 100, 1)
     pwr_diff = round(abs(h_pwr - a_pwr), 1)
     
-    # 動態產生差距評語
     if pwr_diff <= 1.5:
         diff_status = "⚔️ 實力極為接近 (五五開對局)"
-        diff_detail = f"雙方大數據戰力差距僅 {pwr_diff} 分。這是一場典型均勢拉鋸戰，中場控制力與臨場失誤率將決定成敗，和局機率偏高。"
+        diff_detail = f"雙方大數據戰力差距僅 {pwr_diff} 分。這是一場典型均勢拉鋸戰，和局或低分正比機率較高。"
     elif pwr_diff <= 5.0:
         stronger = home_select if h_pwr > a_pwr else away_select
         diff_status = f"⚖️ {stronger} 略佔上風 (小讓球盤)"
-        diff_detail = f"雙方戰力差距為 {pwr_diff} 分，{stronger}在整體陣容深度與近期進攻效率上略勝一籌，但對手仍具備充足的反擊咬分能力。"
+        diff_detail = f"雙方戰力差距為 {pwr_diff} 分，{stronger}在整體陣容深度上略勝一籌，正比推薦傾向{stronger}小勝。"
     else:
         stronger = home_select if h_pwr > a_pwr else away_select
         diff_status = f"🚨 {stronger} 佔據絕對優勢 (實力懸殊)"
-        diff_detail = f"雙方模型戰力存在高達 {pwr_diff} 分的明顯鴻溝！{stronger}在實力層面擁有壓倒性優勢，盤口強烈傾向不讓分獨贏，黑馬爆冷門門檻極高。"
+        diff_detail = f"雙方模型戰力存在高達 {pwr_diff} 分的明顯鴻溝！{stronger}實力壓倒性佔優，正比預測將強烈向{stronger}多進球傾斜。"
 
-    # ==========================================
     # 📊 兩隊實力差距視覺化面板
-    # ==========================================
     st.subheader("📊 兩隊大數據實力差距對比面板")
-    
-    # 兩隊大字體與百分比對齊
     col_h, col_vs, col_a = st.columns([4, 2, 4])
     with col_h:
         st.markdown(f"<h2 style='text-align: center; color: #1F497D;'>🏠 {home_select}</h2>", unsafe_allow_html=True)
@@ -225,12 +238,8 @@ else:
         st.markdown(f"<h2 style='text-align: center; color: #2E7D32;'>✈️ {away_select}</h2>", unsafe_allow_html=True)
         st.markdown(f"<h3 style='text-align: center;'>模型戰力值: {a_pwr}</h3>", unsafe_allow_html=True)
 
-    # 戰力分佈條
     st.markdown(f"**戰力份額分佈： {home_select} ({h_share}%)  vs  {away_select} ({a_share}%)**")
     st.progress(int(h_share))
-    
-    # 差距核心結論評估
-    st.write("")
     st.warning(f"**📢 實力差距核心評估：{diff_status}**\n\n{diff_detail}")
     st.write("---")
 
@@ -249,7 +258,7 @@ else:
     st.write("### 🎯 台灣運彩最佳投注決策建議")
     st.dataframe(df_result, use_container_width=True)
     
-    # 圖表呈現
+    # 图表呈現
     st.write("### 📈 大數據模型不讓分 (1X2) 勝率機率分佈")
     prob_df = pd.DataFrame({
         "機率 (%)": [
