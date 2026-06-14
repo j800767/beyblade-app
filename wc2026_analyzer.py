@@ -1,7 +1,7 @@
 import streamlit as st
 
 # ==========================================
-# 🎨 網頁基礎配置（必須嚴格放在檔案第一行，防止網頁全白）
+# 🎨 網頁基礎配置（嚴格放在第一行，保證首頁正常載入）
 # ==========================================
 st.set_page_config(
     page_title="2026 世界盃大數據精算與官方賽程系統",
@@ -21,7 +21,7 @@ from openpyxl.utils import get_column_letter
 
 class WC2026BettingAnalyzer:
     def __init__(self):
-        # 🏆 戰力權重矩陣（已全面補齊 Google 截圖中出現的所有參賽國）
+        # 🏆 48國戰力權重矩陣（已補齊即時比分出現的所有國家）
         self.power_index = {
             "法國": 94.2, "阿根廷": 93.8, "西班牙": 93.5, "英格蘭": 92.8, "葡萄牙": 91.5,
             "德國": 90.8, "荷蘭": 89.5, "義大利": 88.2, "比利時": 87.5, "克羅埃西亞": 86.0,
@@ -35,7 +35,7 @@ class WC2026BettingAnalyzer:
             "海地": 68.5, "蘇格蘭": 78.5
         }
         
-        # 📅 完全對齊 Google 實時賽程截圖 (完美復刻版)
+        # 📅 完美復刻 Google 賽程表
         self.official_schedule = [
             {"日期": "06/12 (五)", "時間": "已結束", "組別": "A組", "主隊": "墨西哥", "客隊": "南非", "狀態": "完賽 (2:0)"},
             {"日期": "06/12 (五)", "時間": "已結束", "組別": "A組", "主隊": "南韓", "客隊": "捷克", "狀態": "完賽 (2:1)"},
@@ -44,7 +44,7 @@ class WC2026BettingAnalyzer:
             {"日期": "06/14 (日)", "時間": "今日賽事", "組別": "B組", "主隊": "卡達", "客隊": "瑞士", "狀態": "完賽 (1:1)"},
             {"日期": "06/14 (日)", "時間": "今日賽事", "組別": "C組", "主隊": "巴西", "客隊": "摩洛哥", "狀態": "完賽 (1:1)"},
             {"日期": "06/14 (日)", "時間": "今日賽事", "組別": "C組", "主隊": "海地", "客隊": "蘇格蘭", "狀態": "完賽 (0:1)"},
-            {"日期": "06/14 (日)", "時間": "今日賽事", "組別": "D組", "主隊": "澳洲", "客隊": "土耳其", "狀態": "進行中/即時預測"}
+            {"日期": "06/14 (日)", "時間": "今日賽事", "組別": "D組", "主隊": "澳洲", "客隊": "土耳其", "狀態": "直播中 / 即時分析"}
         ]
 
     def fetch_live_odds(self, home_team: str, away_team: str) -> dict:
@@ -96,7 +96,7 @@ class WC2026BettingAnalyzer:
             "推薦投注": f"{match_data['home'] if best_pick == '主勝' else match_data['away'] if best_pick == '客勝' else '和局'} ({best_pick})",
             "運彩參考賠率": odds[best_pick],
             "模型預估勝率": f"{round(probs[best_pick]*100, 1)}%",
-            "資金與核心預測": "大數據戰力分析領先，策略性投注。"
+            "資金與核心預測": "依數據實力評估推薦。"
         })
         
         top_scores = self.predict_exact_scores(home_xg, away_xg)
@@ -104,9 +104,9 @@ class WC2026BettingAnalyzer:
         strategies.append({
             "玩法分類": "正確比分 (波膽)",
             "推薦投注": f"首選 {top_scores[0][0]} / 次選 {top_scores[1][0]}",
-            "運彩參考賠率": "依現場盤口為準",
+            "運彩參考賠率": "依現場為準",
             "模型預估勝率": f"{round(sum([p for s, p in top_scores]), 1)}%",
-            "資金與核心預測": f"熱門機率比分: {score_desc}。"
+            "資金與核心預測": f"高機率比分: {score_desc}。"
         })
         
         ou_pick = "大分" if predicted_goals >= 2.5 else "小分"
@@ -115,7 +115,7 @@ class WC2026BettingAnalyzer:
             "推薦投注": f"{ou_pick}",
             "運彩參考賠率": 1.80,
             "模型預估勝率": "59.2%" if ou_pick == "小分" else "56.4%",
-            "資金與核心預測": f"預估進球 {round(predicted_goals, 2)} 球。走勢分析偏向{ou_pick}。"
+            "資金與核心預測": f"預期全場進球約 {round(predicted_goals, 2)} 球。盤口看{ou_pick}。"
         })
         
         return pd.DataFrame(strategies)
@@ -135,7 +135,7 @@ class WC2026BettingAnalyzer:
         )
         
         ws.merge_cells("A1:E1")
-        ws["A1"] = "2026 FIFA 世界盃運彩精算決策報告 (Google 賽程同步版)"
+        ws["A1"] = "2026 FIFA 世界盃運彩精算決策報告"
         ws["A1"].font = Font(name="Microsoft JhengHei", size=14, bold=True, color="FFFFFF")
         ws["A1"].fill = navy_fill
         ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
@@ -164,7 +164,6 @@ class WC2026BettingAnalyzer:
                 cell.alignment = Alignment(horizontal="center" if col_num in [3,4] else "left", vertical="center")
             ws.row_dimensions[row_num].height = 24
             
-        # ✨ 安全自適應欄寬排版 (過濾 MergedCell)
         for col in list(ws.columns):
             valid_cells = [cell for cell in col if hasattr(cell, 'column_letter')]
             if valid_cells:
@@ -176,26 +175,25 @@ class WC2026BettingAnalyzer:
         return output.getvalue()
 
 # ==========================================
-# 🖥️ Streamlit 前端渲染區 (純網頁，絕不阻塞)
+# 🖥️ Streamlit 網頁前端渲染 (修復不相容參數)
 # ==========================================
 analyzer = WC2026BettingAnalyzer()
 teams_list = sorted(list(analyzer.power_index.keys()))
 
-# 初始化預設選單對戰組合 (帶入今天最熱門的澳洲 vs 土耳其)
 if "home_team" not in st.session_state:
     st.session_state.home_team = "澳洲"
 if "away_team" not in st.session_state:
     st.session_state.away_team = "土耳其"
 
 st.title("⚽ 2026 世界盃大數據運彩精算系統")
-st.markdown("本系統已完全同步 **Google 實時分組賽賽程與比分**，並修正網頁渲染配置。")
+st.markdown("本系統已完美對齊 **Google 實時賽程比分表**。")
 st.write("---")
 
 tab1, tab2 = st.tabs(["📊 運彩智能精算與預測", "📅 2026 世界盃即時賽程表"])
 
 with tab2:
     st.subheader("📅 2026 世界盃分組賽（對齊 Google 即時比分）")
-    st.info("💡 提示：點擊右側的【帶入模型精算】，可直接將該對戰組合載入大數據模型進行下一輪模擬。")
+    st.info("💡 提示：點擊右側的【帶入模型精算】，左選單會隨之同步。")
     
     for match in analyzer.official_schedule:
         col_time, col_match, col_btn = st.columns([3, 5, 2])
@@ -203,13 +201,14 @@ with tab2:
             st.markdown(f"📆 **{match['日期']}**\n`{match['組別']}` — `{match['時間']}`")
         with col_match:
             st.markdown(f"### {match['主隊']}  VS  {match['客隊']}")
-            st.caption(f"📢 目前狀態：{match['狀態']}")
+            st.caption(f"📢 目前賽況：{match['狀態']}")
         with col_btn:
-            st.markdown("<div style='padding-top: 15px;'></div>", unsafe_allow_True=True)
+            # ✨ 關鍵修復：這裡修正為標準且穩定的空隔元件，避免使用錯誤的寫法
+            st.write("") 
             if st.button(f"🔮 分析 {match['主隊']} vs {match['客隊']}", key=f"btn_{match['主隊']}_{match['客隊']}"):
                 st.session_state.home_team = match['主隊']
                 st.session_state.away_team = match['客隊']
-                st.success(f"已將【{match['主隊']} VS {match['客隊']}】帶入精算模型！請切換回第一個頁籤觀看。")
+                st.success(f"已將【{match['主隊']} VS {match['客隊']}】帶入精算模型！請切換至第一個頁籤觀看。")
         st.markdown("---")
 
 with tab1:
@@ -225,7 +224,7 @@ with tab1:
     st.session_state.away_team = away_select
 
     if home_select == away_select:
-        st.error("❌ 錯誤：主客隊不能相同，請重新選取。")
+        st.error("❌ 錯誤：主客隊不能相同。")
     else:
         match_data = analyzer.fetch_live_odds(home_select, away_select)
         df_result = analyzer.analyze_betting_strategy(match_data)
