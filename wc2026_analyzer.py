@@ -4,7 +4,7 @@ import streamlit as st
 # 🎨 網頁基礎配置（嚴格放在第一行，保證首頁正常載入）
 # ==========================================
 st.set_page_config(
-    page_title="2026 世界盃大數據運彩精算系統",
+    page_title="2026 世界盃大數據運彩精算與實力差距分析系統",
     page_icon="⚽",
     layout="wide"
 )
@@ -20,7 +20,7 @@ from openpyxl.utils import get_column_letter
 
 class WC2026BettingAnalyzer:
     def __init__(self):
-        # 🏆 48國官方戰力權重矩陣
+        # 🏆 48國官方戰力權重矩陣（基準分：100為滿分頂點）
         self.power_index = {
             "法國": 94.2, "阿根廷": 93.8, "西班牙": 93.5, "英格蘭": 92.8, "葡萄牙": 91.5,
             "德國": 90.8, "荷蘭": 89.5, "義大利": 88.2, "比利時": 87.5, "克羅埃西亞": 86.0,
@@ -38,6 +38,7 @@ class WC2026BettingAnalyzer:
         h_idx = self.power_index.get(home_team, 80.0)
         a_idx = self.power_index.get(away_team, 80.0)
         
+        # 計算兩隊預期進球率 (xG)
         home_xg = round((h_idx / a_idx) * 1.45, 2)
         away_xg = round((a_idx / h_idx) * 1.15, 2)
         
@@ -83,7 +84,7 @@ class WC2026BettingAnalyzer:
             "推薦投注": f"{match_data['home'] if best_pick == '主勝' else match_data['away'] if best_pick == '客勝' else '和局'} ({best_pick})",
             "運彩參考賠率": odds[best_pick],
             "模型預估勝率": f"{round(probs[best_pick]*100, 1)}%",
-            "資金與核心預測": "依數據實力評估推薦，建議進行資產配置投注。"
+            "資金與核心預測": "依大數據實力模型推薦，建議進行資產配置投注。"
         })
         
         top_scores = self.predict_exact_scores(home_xg, away_xg)
@@ -91,7 +92,7 @@ class WC2026BettingAnalyzer:
         strategies.append({
             "玩法分類": "正確比分 (波膽)",
             "推薦投注": f"首選 {top_scores[0][0]} / 次選 {top_scores[1][0]}",
-            "運彩參考賠率": "依台灣運彩即時盤口為準",
+            "運彩參考賠率": "依現場盤口為準",
             "模型預估勝率": f"{round(sum([p for s, p in top_scores]), 1)}%",
             "資金與核心預測": f"熱門正比機率：{score_desc}。"
         })
@@ -102,12 +103,12 @@ class WC2026BettingAnalyzer:
             "推薦投注": f"{ou_pick}",
             "運彩參考賠率": 1.80,
             "模型預估勝率": "59.2%" if ou_pick == "小分" else "56.4%",
-            "資金與核心預測": f"預期全場總進球約 {round(predicted_goals, 2)} 球。走勢分析偏向{ou_pick}。"
+            "資金與核心預測": f"預期全場總進球約 {round(predicted_goals, 2)} 球。走勢偏向{ou_pick}。"
         })
         
         return pd.DataFrame(strategies)
 
-    def generate_excel_bytes(self, match_info: dict, df: pd.DataFrame) -> bytes:
+    def generate_excel_bytes(self, match_info: dict, df: pd.DataFrame, diff_desc: str) -> bytes:
         output = io.BytesIO()
         wb = Workbook()
         ws = wb.active
@@ -151,6 +152,8 @@ class WC2026BettingAnalyzer:
                 cell.alignment = Alignment(horizontal="center" if col_num in [3,4] else "left", vertical="center")
             ws.row_dimensions[row_num].height = 24
             
+        ws.cell(row=11, column=1, value=f"📋 模型實力評估摘要: {diff_desc}").font = Font(name="Microsoft JhengHei", bold=True, size=10)
+            
         for col in list(ws.columns):
             valid_cells = [cell for cell in col if hasattr(cell, 'column_letter')]
             if valid_cells:
@@ -162,13 +165,13 @@ class WC2026BettingAnalyzer:
         return output.getvalue()
 
 # ==========================================
-# 🖥️ Streamlit 網頁前端渲染 (純預測極簡版)
+# 🖥️ Streamlit 網頁前端渲染 (實力差距量化版)
 # ==========================================
 analyzer = WC2026BettingAnalyzer()
 teams_list = sorted(list(analyzer.power_index.keys()))
 
-st.title("⚽ 2026 世界盃大數據運彩精算決策系統")
-st.markdown("請在左側邊欄自由選取 48 支世界盃參賽國組合，系統將即時生成勝率分布與精算報告。")
+st.title("⚽ 2026 世界盃大數據運彩精算與實力差距分析系統")
+st.markdown("請在左側選單挑選球隊，系統將即時對比**兩隊戰力差距**並進行盤口數據精算。")
 st.write("---")
 
 # 側邊欄控制
@@ -179,13 +182,60 @@ away_select = st.sidebar.selectbox("請選擇 客隊 (Away)", teams_list, index=
 if home_select == away_select:
     st.error("❌ 錯誤：主客隊不能選擇相同國家，請重新配置對戰組合。")
 else:
-    # 進行數據精算
+    # 執行數據精算
     match_data = analyzer.fetch_live_odds(home_select, away_select)
     df_result = analyzer.analyze_betting_strategy(match_data)
     
-    st.subheader(f"🏟️ 當前模擬對戰：{home_select} VS {away_select}")
+    # 🧮 核心亮點：計算兩隊戰力差距與指標
+    h_pwr = analyzer.power_index.get(home_select, 80.0)
+    a_pwr = analyzer.power_index.get(away_select, 80.0)
     
-    # 呈現基本數據指標
+    # 轉化為百分比權重分佈
+    total_pwr = h_pwr + a_pwr
+    h_share = round((h_pwr / total_pwr) * 100, 1)
+    a_share = round((a_pwr / total_pwr) * 100, 1)
+    pwr_diff = round(abs(h_pwr - a_pwr), 1)
+    
+    # 動態產生差距評語
+    if pwr_diff <= 1.5:
+        diff_status = "⚔️ 實力極為接近 (五五開對局)"
+        diff_detail = f"雙方大數據戰力差距僅 {pwr_diff} 分。這是一場典型均勢拉鋸戰，中場控制力與臨場失誤率將決定成敗，和局機率偏高。"
+    elif pwr_diff <= 5.0:
+        stronger = home_select if h_pwr > a_pwr else away_select
+        diff_status = f"⚖️ {stronger} 略佔上風 (小讓球盤)"
+        diff_detail = f"雙方戰力差距為 {pwr_diff} 分，{stronger}在整體陣容深度與近期進攻效率上略勝一籌，但對手仍具備充足的反擊咬分能力。"
+    else:
+        stronger = home_select if h_pwr > a_pwr else away_select
+        diff_status = f"🚨 {stronger} 佔據絕對優勢 (實力懸殊)"
+        diff_detail = f"雙方模型戰力存在高達 {pwr_diff} 分的明顯鴻溝！{stronger}在實力層面擁有壓倒性優勢，盤口強烈傾向不讓分獨贏，黑馬爆冷門門檻極高。"
+
+    # ==========================================
+    # 📊 兩隊實力差距視覺化面板
+    # ==========================================
+    st.subheader("📊 兩隊大數據實力差距對比面板")
+    
+    # 兩隊大字體與百分比對齊
+    col_h, col_vs, col_a = st.columns([4, 2, 4])
+    with col_h:
+        st.markdown(f"<h2 style='text-align: center; color: #1F497D;'>🏠 {home_select}</h2>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='text-align: center;'>模型戰力值: {h_pwr}</h3>", unsafe_allow_html=True)
+    with col_vs:
+        st.markdown("<h1 style='text-align: center; color: #CC0000; padding-top: 10px;'>VS</h1>", unsafe_allow_html=True)
+    with col_a:
+        st.markdown(f"<h2 style='text-align: center; color: #2E7D32;'>✈️ {away_select}</h2>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='text-align: center;'>模型戰力值: {a_pwr}</h3>", unsafe_allow_html=True)
+
+    # 戰力分佈條
+    st.markdown(f"**戰力份額分佈： {home_select} ({h_share}%)  vs  {away_select} ({a_share}%)**")
+    st.progress(int(h_share))
+    
+    # 差距核心結論評估
+    st.write("")
+    st.warning(f"**📢 實力差距核心評估：{diff_status}**\n\n{diff_detail}")
+    st.write("---")
+
+    # 呈現基本數據指標 (xG)
+    st.subheader("🎯 大數據模型預測與運彩決策")
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric(label=f"🏠 {home_select} 預期進球 (xG)", value=f"{match_data['home_xg']} 球")
@@ -211,11 +261,11 @@ else:
     st.bar_chart(prob_df, y="機率 (%)")
 
     # Excel 報告下載
-    excel_data = analyzer.generate_excel_bytes(match_data, df_result)
+    excel_data = analyzer.generate_excel_bytes(match_data, df_result, f"{diff_status} | {diff_detail}")
     st.markdown("<br>", unsafe_allow_html=True)
     st.download_button(
         label="📥 下載此對戰 Excel 決策分析報告",
         data=excel_data,
-        file_name=f"世界盃精算報告_{home_select}_vs_{away_select}.xlsx",
+        file_name=f"世界盃實力差距報告_{home_select}_vs_{away_select}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
