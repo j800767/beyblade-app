@@ -5,16 +5,19 @@ import pandas as pd
 import numpy as np
 from scipy.stats import poisson
 
-# 防呆：如果環境沒安裝 streamlit 依然允許終端機模式執行
-try:
-    import streamlit as st
-    HAS_STREAMLIT = True
-except ImportError:
-    HAS_STREAMLIT = False
-
+import streamlit as st
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+
+# ==========================================
+# 🎨 網頁基礎配置（必須是 Streamlit 的第一個指令）
+# ==========================================
+st.set_page_config(
+    page_title="2026 世界盃大數據精算與官方賽程系統",
+    page_icon="⚽",
+    layout="wide"
+)
 
 class WC2026BettingAnalyzer:
     def __init__(self):
@@ -30,7 +33,7 @@ class WC2026BettingAnalyzer:
             "日本": 84.8, "伊朗": 81.8, "南韓": 81.5, "澳洲": 80.2, "沙烏地阿拉伯": 77.0, 
             "卡達": 75.0, "烏茲別克": 74.5, "伊拉克": 73.8, "阿聯": 72.5, "紐西蘭": 71.0
         }
-        # 📅 2026 世界盃分組賽官方標準對戰表（完全校正版）
+        # 📅 2026 世界盃分組賽官方標準對戰表（完全校正台灣時間）
         self.official_schedule = [
             {"日期": "06/13 (六)", "時間": "05:00", "組別": "A組 (官方揭幕戰)", "主隊": "墨西哥", "客隊": "南非", "主辦城市": "墨西哥城"},
             {"日期": "06/13 (六)", "時間": "09:00", "組別": "D組", "主隊": "美國", "客隊": "牙買加", "主辦城市": "洛杉磯"},
@@ -95,7 +98,7 @@ class WC2026BettingAnalyzer:
             "推薦投注": f"{match_data['home'] if best_pick == '主勝' else match_data['away'] if best_pick == '客勝' else '和局'} ({best_pick})",
             "運彩參考賠率": odds[best_pick],
             "模型預估勝率": f"{round(probs[best_pick]*100, 1)}%",
-            "資金與核心預測": "建議下注資金 10%。"
+            "資金與核心預測": "建議下注資金 10%。大數據戰力領先。"
         })
         
         top_scores = self.predict_exact_scores(home_xg, away_xg)
@@ -114,13 +117,13 @@ class WC2026BettingAnalyzer:
             "推薦投注": f"{ou_pick}",
             "運彩參考賠率": 1.80,
             "模型預估勝率": "59.2%" if ou_pick == "小分" else "56.4%",
-            "資金與核心預測": f"預估進球 {round(predicted_goals, 2)} 球。走勢偏{ou_pick}。"
+            "資金與核心預測": f"預估進球 {round(predicted_goals, 2)} 球。走勢偏向{ou_pick}。"
         })
         
         return pd.DataFrame(strategies)
 
-    def build_excel_workbook(self, match_info: dict, df: pd.DataFrame) -> Workbook:
-        """核心 Excel 構建邏輯，完美避開 MergedCell 欄寬 bug"""
+    def generate_excel_bytes(self, match_info: dict, df: pd.DataFrame) -> bytes:
+        output = io.BytesIO()
         wb = Workbook()
         ws = wb.active
         ws.title = "決策分析結果"
@@ -163,133 +166,96 @@ class WC2026BettingAnalyzer:
                 cell.alignment = Alignment(horizontal="center" if col_num in [3,4] else "left", vertical="center")
             ws.row_dimensions[row_num].height = 24
             
-        # ✨ 安全調整欄寬：跳過 A1 這種合併儲存格的干擾
+        # ✨ 安全調整欄寬：完美避開 MergedCell 報錯
         for col in list(ws.columns):
             valid_cells = [cell for cell in col if hasattr(cell, 'column_letter')]
             if valid_cells:
                 max_len = max(len(str(cell.value or '')) for cell in col)
                 col_letter = get_column_letter(valid_cells[0].column)
                 ws.column_dimensions[col_letter].width = max(max_len * 1.5, 15)
-        return wb
-
-    def export_to_excel(self, match_info: dict, df: pd.DataFrame):
-        """本地端終端機專用的儲存實體檔案函式 (已修復 MergedCell 報錯)"""
-        wb = self.build_excel_workbook(match_info, df)
-        filename = f"世界盃報告_{match_info['home']}_vs_{match_info['away']}.xlsx"
-        wb.save(filename)
-        print(f"═》📊 Excel 報表已成功導出至本地：{os.path.abspath(filename)}")
-
-    def generate_excel_bytes(self, match_info: dict, df: pd.DataFrame) -> bytes:
-        """網頁端 Streamlit 下載專用的二進制流函式"""
-        wb = self.build_excel_workbook(match_info, df)
-        output = io.BytesIO()
+            
         wb.save(output)
         return output.getvalue()
 
-    def run_terminal_app(self):
-        """本地命令列模式 (CLI)"""
-        print("\n" + "="*50)
-        print(" ⚽ 2026 世界盃大數據精算終端系統 (台灣運彩專用) ")
-        print("="*50)
-        print("\n📅 今日焦點官方賽程：")
-        for idx, m in enumerate(self.official_schedule, 1):
-            print(f" [{idx}] {m['日期']} {m['時間']} | {m['組別']} | {m['主隊']} VS {m['客隊']} ({m['主辦城市']})")
-        
-        try:
-            choice = int(input("\n👉 請輸入欲分析的賽程編號 (或輸入 0 自定義隊伍)："))
-            if choice in range(1, len(self.official_schedule) + 1):
-                match = self.official_schedule[choice - 1]
-                h_team, a_team = match["主隊"], match["客隊"]
-            else:
-                teams = sorted(list(self.power_index.keys()))
-                print("\n可選隊伍:", ", ".join(teams))
-                h_team = input("請輸入主隊名稱: ").strip()
-                a_team = input("請輸入客隊名稱: ").strip()
-                if h_team not in self.power_index or a_team not in self.power_index:
-                    print("❌ 隊伍名稱輸入錯誤！")
-                    return
-            
-            match_data = self.fetch_live_odds(h_team, a_team)
-            analysis_df = self.analyze_betting_strategy(match_data)
-            
-            print(f"\n🏟️ 對戰分析：{h_team} (主) VS {a_team} (客)")
-            print(f" 🏠 預期進球數: {match_data['home_xg']} | ✈️ 預期進球數: {match_data['away_xg']}")
-            print("\n🎯 決策建議推薦：")
-            print(analysis_df.to_string(index=False))
-            
-            # 呼叫已修復的本地導出函式
-            self.export_to_excel(match_data, analysis_df)
-            
-        except ValueError:
-            print("❌ 輸入無效。")
+# ==========================================
+# 🖥️ Streamlit 網頁前端渲染邏輯（無 input() 阻塞）
+# ==========================================
+analyzer = WC2026BettingAnalyzer()
+teams_list = sorted(list(analyzer.power_index.keys()))
 
-# ==========================================
-# 🖥️ 執行環境雙棲分流控制
-# ==========================================
-if __name__ == "__main__":
-    analyzer = WC2026BettingAnalyzer()
+if "home_team" not in st.session_state:
+    st.session_state.home_team = "巴西"
+if "away_team" not in st.session_state:
+    st.session_state.away_team = "阿爾及利亞"
+
+tab1, tab2 = st.tabs(["📊 運彩智能精算與預測", "📅 2026 世界盃官方賽程表"])
+
+with tab2:
+    st.subheader("📅 2026 世界盃分組賽官方標準對戰表 (台灣時間對齊)")
+    st.info("💡 快速下注：點選下方各場比賽右側的【帶入模型精算】，左側選單會同步更新。")
     
-    # 判斷是不是用 streamlit run 啟動
-    if HAS_STREAMLIT and ("_st_is_running_with_streamlit" in globals() or os.environ.get("STREAMLIT_SERVER_PORT") is not None):
-        st.title("⚽ 2026 世界盃大數據精算與官方賽程系統")
-        st.markdown("本系統已完美相容『本地命令列模式』與『網頁模式』，全面修正 Excel 與賽程時間。")
-        st.write("---")
+    for match in analyzer.official_schedule:
+        col_time, col_match, col_btn = st.columns([3, 5, 2])
+        with col_time:
+            st.markdown(f"📆 **{match['日期']} {match['時間']}**\n`{match['組別']}`\n📍 *{match['主辦城市']}*")
+        with col_match:
+            st.markdown(f"### 🏠 {match['主隊']}  VS  ✈️ {match['客隊']}")
+        with col_btn:
+            st.markdown("<div style='padding-top: 15px;'></div>", unsafe_allow_html=True)
+            if st.button(f"🔮 分析 {match['主隊']} vs {match['客隊']}", key=f"web_btn_{match['主隊']}_{match['客隊']}"):
+                st.session_state.home_team = match['主隊']
+                st.session_state.away_team = match['客隊']
+                st.success(f"已成功帶入【{match['主隊']} VS {match['客隊']}】！請切換到第一個頁籤觀看報告。")
+        st.markdown("---")
 
-        teams_list = sorted(list(analyzer.power_index.keys()))
+with tab1:
+    st.sidebar.header("🏆 48國對戰手動調整區")
+    
+    # 確保頁籤同步時的 index 正常防呆
+    h_index = teams_list.index(st.session_state.home_team) if st.session_state.home_team in teams_list else 0
+    a_index = teams_list.index(st.session_state.away_team) if st.session_state.away_team in teams_list else 1
+    
+    home_select = st.sidebar.selectbox("請選擇 主隊 (Home)", teams_list, index=h_index)
+    away_select = st.sidebar.selectbox("請選擇 客隊 (Away)", teams_list, index=a_index)
 
-        if "home_team" not in st.session_state:
-            st.session_state.home_team = "巴西"
-        if "away_team" not in st.session_state:
-            st.session_state.away_team = "阿爾及利亞"
+    st.session_state.home_team = home_select
+    st.session_state.away_team = away_select
 
-        tab1, tab2 = st.tabs(["📊 運彩智能精算與預測", "📅 2026 世界盃官方賽程表"])
-
-        with tab2:
-            st.subheader("📅 2026 世界盃分組賽官方標準對戰表 (台灣時間換算)")
-            for match in analyzer.official_schedule:
-                col_time, col_match, col_btn = st.columns([3, 5, 2])
-                with col_time:
-                    st.markdown(f"📆 **{match['日期']} {match['時間']}**\n`{match['組別']}`\n📍 *{match['主辦城市']}*")
-                with col_match:
-                    st.markdown(f"### 🏠 {match['主隊']}  VS  ✈️ {match['客隊']}")
-                with col_btn:
-                    st.markdown("<div style='padding-top: 15px;'></div>", unsafe_allow_html=True)
-                    if st.button(f"🔮 分析 {match['主隊']} vs {match['客隊']}", key=f"web_btn_{match['主隊']}_{match['客隊']}"):
-                        st.session_state.home_team = match['主隊']
-                        st.session_state.away_team = match['客隊']
-                        st.success(f"已成功帶入【{match['主隊']} VS {match['客隊']}】！請點選上方第一個頁籤查看精算報告。")
-                st.markdown("---")
-
-        with tab1:
-            st.sidebar.header("🏆 48國對戰手動調整區")
-            h_idx = teams_list.index(st.session_state.home_team) if st.session_state.home_team in teams_list else 0
-            a_idx = teams_list.index(st.session_state.away_team) if st.session_state.away_team in teams_list else 1
-            
-            home_select = st.sidebar.selectbox("請選擇 主隊", teams_list, index=h_idx)
-            away_select = st.sidebar.selectbox("請選擇 客隊", teams_list, index=a_idx)
-
-            if home_select == away_select:
-                st.error("❌ 錯誤：主客隊不能相同。")
-            else:
-                m_data = analyzer.fetch_live_odds(home_select, away_select)
-                res_df = analyzer.analyze_betting_strategy(m_data)
-                
-                st.subheader(f"🏟️ 當前分析：{home_select} VS {away_select}")
-                c1, c2, c3 = st.columns(3)
-                c1.metric(f"🏠 {home_select} 預期進球", f"{m_data['home_xg']} 球")
-                c2.metric(f"✈️ {away_select} 預期進球", f"{m_data['away_xg']} 球")
-                c3.metric("📊 總預估進球", f"{round(m_data['home_xg'] + m_data['away_xg'], 2)} 球")
-
-                st.write("### 🎯 最佳投注決策建議")
-                st.dataframe(res_df, use_container_width=True)
-
-                excel_bytes = analyzer.generate_excel_bytes(m_data, res_df)
-                st.download_button(
-                    label="📥 下載此對戰 Excel 決策分析報告",
-                    data=excel_bytes,
-                    file_name=f"世界盃報告_{home_select}_vs_{away_select}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+    if home_select == away_select:
+        st.error("❌ 錯誤：主隊與客隊不能相同，請重新選擇。")
     else:
-        # 傳統終端機執行環境
-        analyzer.run_terminal_app()
+        match_data = analyzer.fetch_live_odds(home_select, away_select)
+        df_result = analyzer.analyze_betting_strategy(match_data)
+        
+        st.subheader(f"🏟️ 當前分析對戰：{home_select} VS {away_select}")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(label=f"🏠 {home_select} 預期進球 (xG)", value=f"{match_data['home_xg']} 球")
+        with col2:
+            st.metric(label=f"✈️ {away_select} 預期進球 (xG)", value=f"{match_data['away_xg']} 球")
+        with col3:
+            total_g = round(match_data['home_xg'] + match_data['away_xg'], 2)
+            st.metric(label="📊 全場總預估進球數", value=f"{total_g} 球")
+
+        st.write("### 🎯 台灣運彩最佳投注決策建議")
+        st.dataframe(df_result, use_container_width=True)
+        
+        st.write("### 📈 大數據模型不讓分 (1X2) 勝率分佈")
+        prob_df = pd.DataFrame({
+            "機率 (%)": [
+                round(match_data["prob_1X2"]["主勝"]*100, 1),
+                round(match_data["prob_1X2"]["和局"]*100, 1),
+                round(match_data["prob_1X2"]["客勝"]*100, 1)
+            ]
+        }, index=["主勝", "和局", "客勝"])
+        st.bar_chart(prob_df, y="機率 (%)")
+
+        excel_data = analyzer.generate_excel_bytes(match_data, df_result)
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.download_button(
+            label="📥 下載此對戰 Excel 決策分析報告",
+            data=excel_data,
+            file_name=f"世界盃官方報告_{home_select}_vs_{away_select}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
