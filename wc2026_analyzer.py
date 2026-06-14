@@ -244,4 +244,26 @@ with tab1:
             st.metric(label=f"✈️ {away_select} 預期進球 (xG)", value=f"{match_data['away_xg']} 球")
         with col3:
             total_g = round(match_data['home_xg'] + match_data['away_xg'], 2)
-            st.metric(label="📊 全場總預估進球數", value=f"{total_
+            st.metric(label="📊 全場總預估進球數", value=f"{total_g} 球")
+
+        st.write("### 🎯 台灣運彩最佳投注決策建議")
+        st.dataframe(df_result, use_container_width=True)
+        
+        st.write("### 📈 大數據模型不讓分 (1X2) 勝率機率分佈")
+        prob_df = pd.DataFrame({
+            "機率 (%)": [
+                round(match_data["prob_1X2"]["主勝"]*100, 1),
+                round(match_data["prob_1X2"]["和局"]*100, 1),
+                round(match_data["prob_1X2"]["客勝"]*100, 1)
+            ]
+        }, index=["主勝", "和局", "客勝"])
+        st.bar_chart(prob_df, y="機率 (%)")
+
+        excel_data = analyzer.generate_excel_bytes(match_data, df_result)
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.download_button(
+            label="📥 下載此對戰 Excel 決策分析報告",
+            data=excel_data,
+            file_name=f"世界盃官方報告_{home_select}_vs_{away_select}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
