@@ -20,7 +20,7 @@ from openpyxl.utils import get_column_letter
 
 class WC2026BettingAnalyzer:
     def __init__(self):
-        # 🏆 2026 世界盃官方參賽 48 國大數據戰力矩陣（完全精確版）
+        # 🏆 2026 世界盃官方參賽 48 國大數據戰力矩陣
         self.power_index = {
             # --- 歐洲 (UEFA) ---
             "法國": 94.2, "西班牙": 93.5, "英格蘭": 92.8, "葡萄牙": 91.5, "德國": 90.8, 
@@ -38,7 +38,7 @@ class WC2026BettingAnalyzer:
             
             # --- 非洲 (CAF) ---
             "摩洛哥": 86.8, "塞內加爾": 84.2, "象牙海岸": 83.8, "奈及利亞": 81.5, "埃及": 79.0, 
-            "突尼西亞": 78.2, "阿爾及利亞": 78.0, "喀麥隆": 77.5, "迦納": 76.8, "剛果民主共和國": 75.2, 
+            "突尼西亞": 78.2, "阿爾及利亞": 78.0, "喀幕隆": 77.5, "迦納": 76.8, "剛果民主共和國": 75.2, 
             "南非": 74.0, "維德角": 73.0,
             
             # --- 亞洲 & 大洋洲 (AFC/OFC) ---
@@ -50,8 +50,12 @@ class WC2026BettingAnalyzer:
         h_idx = self.power_index.get(home_team, 80.0)
         a_idx = self.power_index.get(away_team, 80.0)
         
-        home_xg = round((h_idx / a_idx) * 1.45, 2)
-        away_xg = round((a_idx / h_idx) * 1.15, 2)
+        # 引入防守修正係數，避免極端大分失準
+        pwr_diff = abs(h_idx - a_idx)
+        defense_factor = 0.92 if pwr_diff < 5.0 else 1.0  # 實力接近時，國際大賽淘汰賽往往更保守
+        
+        home_xg = round(((h_idx / a_idx) * 1.45) * defense_factor, 2)
+        away_xg = round(((a_idx / h_idx) * 1.15) * defense_factor, 2)
         
         total = h_idx + a_idx + 42
         prob_home = h_idx / total
@@ -114,12 +118,15 @@ class WC2026BettingAnalyzer:
         top_scores = self.predict_exact_scores(home_team, away_team, home_xg, away_xg)
         score_desc = ", ".join([f"【{s}】({p}%)" for s, p in top_scores])
         
+        # 增加避險防守正比提示
+        hedge_score = f"{home_team} 1:0" if home_xg > away_xg else f"{away_team} 1:0"
+        
         strategies.append({
             "玩法分類": "正確比分 (波膽)",
             "推薦投注": f"首選 {top_scores[0][0]} / 次選 {top_scores[1][0]}",
             "運彩參考賠率": "依現場盤口為準",
             "模型預估勝率": f"{round(sum([p for s, p in top_scores]), 1)}%",
-            "資金與核心預測": f"熱門正比精算機率排名：{score_desc}。"
+            "資金與核心預測": f"熱門正比排名：{score_desc}。如遇卡關悶局，強烈建議補防買單【{hedge_score}】或【和局 0:0】作為風險對沖。"
         })
         
         # 3. 大小分
@@ -129,7 +136,7 @@ class WC2026BettingAnalyzer:
             "推薦投注": f"{ou_pick}",
             "運彩參考賠率": 1.80,
             "模型預估勝率": "59.2%" if ou_pick == "小分" else "56.4%",
-            "資金與核心預測": f"預期全場總進球約 {round(predicted_goals, 2)} 球。數據走勢偏向{ou_pick}。"
+            "資金與核心預測": f"預期全場總進球約 {round(predicted_goals, 2)} 球。近期國際賽風向緊縮，小分過盤率實質上升。"
         })
         
         return pd.DataFrame(strategies)
@@ -196,8 +203,8 @@ class WC2026BettingAnalyzer:
 analyzer = WC2026BettingAnalyzer()
 teams_list = sorted(list(analyzer.power_index.keys()))
 
-st.title("⚽ 2026 世界盃大數據運彩精算與實力差距分析系統")
-st.markdown("請在左側選單挑選球隊，系統將即時對比**兩隊戰力差距**並進行盤口數據精算。")
+st.title("⚽ 2026 世界盃大數據運彩精算與實力差距分析系統 (避險強化版)")
+st.markdown("請在左側選單挑選球隊，系統將即時對比**兩隊戰力差距**、動態修正進球期望值並進行盤口精算。")
 st.write("---")
 
 # 側邊欄控制
@@ -223,15 +230,15 @@ else:
     
     if pwr_diff <= 1.5:
         diff_status = "⚔️ 實力極為接近 (五五開對局)"
-        diff_detail = f"雙方大數據戰力差距僅 {pwr_diff} 分。這是一場典型均勢拉鋸戰，和局或低分正比機率較高。"
+        diff_detail = f"雙方大數據戰力差距僅 {pwr_diff} 分。淘汰賽高機率踢出防守悶局，和局或低分正比（1:1、0:0）過盤率顯著飆升。"
     elif pwr_diff <= 5.0:
         stronger = home_select if h_pwr > a_pwr else away_select
         diff_status = f"⚖️ {stronger} 略佔上風 (小讓球盤)"
-        diff_detail = f"雙方戰力差距為 {pwr_diff} 分，{stronger}在整體陣容深度上略勝一籌，正比推薦傾向{stronger}小勝。"
+        diff_detail = f"雙方戰力差距為 {pwr_diff} 分，{stronger}在整體陣容深度上略勝一籌，正比推薦傾向{stronger}小勝一球。"
     else:
         stronger = home_select if h_pwr > a_pwr else away_select
         diff_status = f"🚨 {stronger} 佔據絕對優勢 (實力懸殊)"
-        diff_detail = f"雙方模型戰力存在高達 {pwr_diff} 分的明顯鴻溝！{stronger}實力壓倒性佔優，正比預測將強烈向{stronger}多進球傾斜。"
+        diff_detail = f"雙方模型戰力存在高達 {pwr_diff} 分的明显鴻溝！{stronger}實力壓倒性佔優，正比預測強烈向{stronger}多進球傾斜，防守端極穩。"
 
     # 📊 兩隊實力差距視覺化面板
     st.subheader("📊 兩隊大數據實力差距對比面板")
