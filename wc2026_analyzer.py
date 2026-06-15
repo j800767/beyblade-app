@@ -203,7 +203,7 @@ class WC2026BettingAnalyzer:
 analyzer = WC2026BettingAnalyzer()
 teams_list = sorted(list(analyzer.power_index.keys()))
 
-st.title("⚽ 2026 世界盃大數據運彩精算與實力差距分析系統 (避險強化版)")
+st.title("⚽ 2026 世界盃大數據運彩精算與實力差距分析系統 (大頭避險強化版)")
 st.markdown("請在左側選單挑選球隊，系統將即時對比**兩隊戰力差距**、動態修正進球期望值並進行盤口精算。")
 st.write("---")
 
