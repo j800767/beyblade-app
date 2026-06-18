@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import random
 
-st.set_page_config(page_title="戰鬥陀螺 LOL瑞士輪系統", page_icon="🌀", layout="wide")
+st.set_page_config(page_title="三重盃 戰鬥陀螺 瑞士輪比賽系統", page_icon="🌀", layout="wide")
 
 DATA_FILE = "beyblade_registrations.csv"
 SCORE_FILE = "tournament_scores.csv"
@@ -47,7 +47,7 @@ def check_inputs(name, b1, r1, bit1, b2, r2, bit2, b3, r3, bit3, b4, r4, bit4, i
     return True, ""
 
 df_registrations = load_data()
-tab1, tab2 = st.tabs(["📝 選手零件登記與名單管理", "🏆 LOL版瑞士輪控制台"])
+tab1, tab2 = st.tabs(["📝 選手零件登記與名單管理", "🏆瑞士輪控制台"])
 
 st.sidebar.header("🔑 管理者驗證專區")
 admin_input = st.sidebar.text_input("輸入管理密碼", type="password")
