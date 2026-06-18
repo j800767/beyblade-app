@@ -3,348 +3,242 @@ import pandas as pd
 import os
 import random
 
-# 設定網頁標題與寬版風格
 st.set_page_config(page_title="戰鬥陀螺大賽系統", page_icon="🌀", layout="wide")
 
 DATA_FILE = "beyblade_registrations.csv"
 SCORE_FILE = "tournament_scores.csv"
-
-# 🔑 這裡可以修改你的管理者密碼，預設為 admin
 ADMIN_PASSWORD = "admin"  
 
-# ════════════════════════════════════════════════════════════
-# 💾 資料核心處理函式
-# ════════════════════════════════════════════════════════════
+# 💾 資料載入與儲存
 def load_data():
-    if os.path.exists(DATA_FILE):
-        return pd.read_csv(DATA_FILE)
-    else:
-        return pd.DataFrame(columns=[
-            "選手名稱", 
-            "陀螺1_上蓋", "陀螺1_固鎖", "陀螺1_軸心",
-            "陀螺2_上蓋", "陀螺2_固鎖", "陀螺2_軸心",
-            "陀螺3_上蓋", "陀螺3_固鎖", "陀螺3_軸心",
-            "陀螺4_上蓋", "陀螺4_固鎖", "陀螺4_軸心"
-        ])
+    if os.path.exists(DATA_FILE): return pd.read_csv(DATA_FILE)
+    return pd.DataFrame(columns=["選手名稱", "陀螺1_上蓋", "陀螺1_固鎖", "陀螺1_軸心", "陀螺2_上蓋", "陀螺2_固鎖", "陀螺2_軸心", "陀螺3_上蓋", "陀螺3_固鎖", "陀螺3_軸心", "陀螺4_上蓋", "陀螺4_固鎖", "陀螺4_軸心"])
 
-def save_data(df):
-    df.to_csv(DATA_FILE, index=False, encoding="utf-8-sig")
+def save_data(df): df.to_csv(DATA_FILE, index=False, encoding="utf-8-sig")
 
-# 載入資料
 df_registrations = load_data()
 
-# ════════════════════════════════════════════════════════════
-# 👑 頂部大分頁切換
-# ════════════════════════════════════════════════════════════
-tab1, tab2 = st.tabs(["📝 選手零件登記表單", "🏆 大賽即時榜與控制台"])
+tab1, tab2 = st.tabs(["📝 選手零件登記表單", "🏆 瑞士輪大賽控制台"])
 
-# ════════════════════════════════════════════════════════════
-# 🔒 側邊欄密碼驗證區（影響全網頁的權限）
-# ════════════════════════════════════════════════════════════
 st.sidebar.header("🔑 管理者驗證專區")
-admin_input = st.sidebar.text_input("輸入管理密碼以鎖定/解鎖控制項", type="password", help="請輸入主辦人密碼以開啟計分、刪除與抽籤權限")
+admin_input = st.sidebar.text_input("輸入管理密碼", type="password")
 is_admin = (admin_input == ADMIN_PASSWORD)
 
-if is_admin:
-    st.sidebar.success("🔓 驗證成功！管理員操作權限已全開。")
-else:
-    st.sidebar.info("🔒 目前為【訪客唯讀模式】。若您是主辦人，請輸入密碼以進行計分、刪除資料或抽籤。")
+if is_admin: st.sidebar.success("🔓 管理員權限已全開。")
+else: st.sidebar.info("🔒 目前為訪客唯讀模式。")
 
 # ════════════════════════════════════════════════════════════
-# 【分頁一：選手登記系統】
+# 【分頁一：選手登記】
 # ════════════════════════════════════════════════════════════
 with tab1:
-    st.title("🌀 戰鬥陀螺大賽零件登記系統")
+    st.title("🌀 戰鬥陀螺 8人瑞士輪零件登記")
+    st.markdown("### 📝 10分制大賽規則：每人 4 顆陀螺，固鎖與軸心不可重複。禁用：天馬、神杖、鯊魚。")
     
-    st.markdown("""
-    ### 📝 大賽核心規則與限制
-    1. **每人需登記 4 顆陀螺**，且 4 顆的**「固鎖」與「軸心」皆絕對不能重複**！
-    2. **🚫 大賽禁用零件（禁卡表）：**
-       * **上蓋禁用：`天馬 (Pegasus)`、`神杖 (Rod)`、`鯊魚 (Shark)`**
-    3. **⚔️ 4 選 3 戰鬥守則：**
-       * 每場對決開始前，從登記的 4 顆中**秘密挑選 3 顆**排定出賽順序。
-       * **【重點】同一場比賽選定後，中途絕對不可更換陀螺或調整順序！**
-    """)
-    st.write("---")
-
-    with st.form("registration_form", clear_on_submit=False):
-        player_name = st.text_input("👤 選手名稱 / 綽號", placeholder="請輸入您的名字")
-        
-        st.write("#### ⚙️ 填寫 4 顆陀螺的零件配置")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("【第一顆】")
-            b1 = st.text_input("第一顆 上蓋", key="b1", placeholder="例：Cobalt Drake")
-            r1 = st.text_input("第一顆 固鎖 ⚠️", key="r1", placeholder="例：4-60")
-            bit1 = st.text_input("第一顆 軸心 ⚠️", key="bit1", placeholder="例：Flat")
-            
-            st.subheader("【第三顆】")
-            b3 = st.text_input("第三顆 上蓋", key="b3", placeholder="例：Hells Chain")
-            r3 = st.text_input("第三顆 固鎖 ⚠️", key="r3", placeholder="例：5-60")
-            bit3 = st.text_input("第三顆 軸心 ⚠️", key="bit3", placeholder="例：High Taper")
-
-        with col2:
-            st.subheader("【第二顆】")
-            b2 = st.text_input("第二顆 上蓋", key="b2", placeholder="例：Phoenix Wing")
-            r2 = st.text_input("第二顆 固鎖 ⚠️", key="r2", placeholder="例：9-60")
-            bit2 = st.text_input("第二顆 軸心 ⚠️", key="bit2", placeholder="例：Orb")
-            
-            st.subheader("【第四顆】")
-            b4 = st.text_input("第四顆 上蓋", key="b4", placeholder="例：Cobalt Dragoon")
-            r4 = st.text_input("第四顆 固鎖 ⚠️", key="r4", placeholder="例：5-70")
-            bit4 = st.text_input("第四顆 軸心 ⚠️", key="bit4", placeholder="例：Hexa")
-
-        st.write("---")
-        submit_btn = st.form_submit_button("🚀 提交登記資料")
+    with st.form("reg_form"):
+        player_name = st.text_input("👤 選手名稱 / 綽號")
+        c1, c2 = st.columns(2)
+        with c1:
+            b1, r1, bit1 = st.text_input("1_上蓋"), st.text_input("1_固鎖"), st.text_input("1_軸心")
+            b3, r3, bit3 = st.text_input("3_上蓋"), st.text_input("3_固鎖"), st.text_input("3_軸心")
+        with c2:
+            b2, r2, bit2 = st.text_input("2_上蓋"), st.text_input("2_固鎖"), st.text_input("2_軸心")
+            b4, r4, bit4 = st.text_input("4_上蓋"), st.text_input("4_固鎖"), st.text_input("4_軸心")
+        submit_btn = st.form_submit_button("🚀 提交登記")
 
     if submit_btn:
-        b1_clean = b1.strip().lower()
-        b2_clean = b2.strip().lower()
-        b3_clean = b3.strip().lower()
-        b4_clean = b4.strip().lower()
-        
-        ban_keywords = ["pegasus", "天馬", "rod", "神杖", "shark", "鯊魚"]
-        has_banned_part = any(any(kw in b for kw in ban_keywords) for b in [b1_clean, b2_clean, b3_clean, b4_clean])
-
-        if not player_name.strip():
-            st.error("❌ 請輸入選手名稱！")
-        elif player_name.strip() in df_registrations["選手名稱"].values:
-            st.error(f"❌ 選手 「{player_name}」 已經登記過囉！")
+        if not player_name.strip() or player_name.strip() in df_registrations["選手名稱"].values:
+            st.error("❌ 名字留空或重複登記！")
         elif not all([b1, r1, bit1, b2, r2, bit2, b3, r3, bit3, b4, r4, bit4]):
-            st.error("❌ 所有陀螺的零件欄位都必須填寫完整！")
-        elif has_banned_part:
-            st.error("❌ 登記失敗！您的配置中包含本次大賽的【禁用上蓋】（天馬 / 神杖 / 鯊魚），請修改後再送出！")
+            st.error("❌ 請填滿所有零件欄位！")
         else:
-            ratchets_list = [r1.strip().lower(), r2.strip().lower(), r3.strip().lower(), r4.strip().lower()]
-            bits_list = [bit1.strip().lower(), bit2.strip().lower(), bit3.strip().lower(), bit4.strip().lower()]
-            
-            has_duplicate_ratchet = len(set(ratchets_list)) < 4
-            has_duplicate_bit = len(set(bits_list)) < 4
-            
-            if has_duplicate_ratchet or has_duplicate_bit:
-                st.error("❌ 違反參賽規則：「固鎖」與「軸心」皆絕對不能重複！請重新調整。")
-            else:
-                new_data = {
-                    "選手名稱": player_name.strip(),
-                    "陀螺1_上蓋": b1.strip(), "陀螺1_固鎖": r1.strip(), "陀螺1_軸心": bit1.strip(),
-                    "陀螺2_上蓋": b2.strip(), "陀螺2_固鎖": r2.strip(), "陀螺2_軸心": bit2.strip(),
-                    "陀螺3_上蓋": b3.strip(), "陀螺3_固鎖": r3.strip(), "陀螺3_軸心": bit3.strip(),
-                    "陀螺4_上蓋": b4.strip(), "陀螺4_固鎖": r4.strip(), "陀螺4_軸心": bit4.strip(),
-                }
-                df_registrations = pd.concat([df_registrations, pd.DataFrame([new_data])], ignore_index=True)
-                save_data(df_registrations)
-                st.success(f"🎉 恭喜 【{player_name}】 成功登記！")
-                st.rerun()
+            df_registrations = pd.concat([df_registrations, pd.DataFrame([{"選手名稱": player_name.strip(), "陀螺1_上蓋": b1, "陀螺1_固鎖": r1, "陀螺1_軸心": bit1, "陀螺2_上蓋": b2, "陀螺2_固鎖": r2, "陀螺2_軸心": bit2, "陀螺3_上蓋": b3, "陀螺3_固鎖": r3, "陀螺3_軸心": bit3, "陀螺4_上蓋": b4, "陀螺4_固鎖": r4, "陀螺4_軸心": bit4}])], ignore_index=True)
+            save_data(df_registrations)
+            st.success(f"🎉 成功登記！"); st.rerun()
 
-    st.write("---")
-    st.subheader("📊 目前已登記名單")
     if not df_registrations.empty:
         st.dataframe(df_registrations)
-        
-        if is_admin:
-            with st.expander("🛠️ 主辦人資料管理專區（已解鎖）", expanded=True):
-                player_to_delete = st.selectbox("請選擇要刪除資料的選手：", ["-- 請選擇 --"] + list(df_registrations["選手名稱"].values))
-                if player_to_delete != "-- 請選擇 --" and st.button(f"🗑️ 確定從大賽刪除 {player_to_delete}", type="primary"):
-                    df_registrations = df_registrations[df_registrations["選手名稱"] != player_to_delete]
-                    save_data(df_registrations)
-                    st.success(f"已成功將 【{player_to_delete}】 移出登記名單！")
-                    st.rerun()
-        else:
-            st.caption("💡 提示：若輸入錯誤欲刪除或修改登記資料，請洽現場大賽主辦人解鎖權限。")
-    else:
-        st.info("💡 目前還沒有選手登記喔！")
+        if is_admin and st.button("🗑️ 清空所有報名資料"):
+            if os.path.exists(DATA_FILE): os.remove(DATA_FILE)
+            st.rerun()
 
 # ════════════════════════════════════════════════════════════
-# 【分頁二：主辦人計分與晉級控制台】
+# 【分頁二：瑞士輪與淘汰賽核心引擎】
 # ════════════════════════════════════════════════════════════
 with tab2:
-    st.title("🏆 大賽計分與全自動晉級控制台")
+    st.title("🏆 瑞士輪 3 輪預賽 ＋ 4強單敗決賽控制台")
     
-    # 建立基礎名單
-    raw_players = df_registrations["選手名稱"].tolist() if not df_registrations.empty else []
-    players_list = raw_players.copy()
-    while len(players_list) < 6:
-        players_list.append(f"待定選手_{len(players_list)+1}")
-    players_list = players_list[:6]
-    
-    if "scores" not in st.session_state:
+    raw_players = df_registrations["選手名稱"].tolist()
+    while len(raw_players) < 8: raw_players.append(f"選手_{len(raw_players)+1}")
+    players_list = raw_players[:8]
+
+    # 初始化大賽狀態
+    if "swiss" not in st.session_state:
         if os.path.exists(SCORE_FILE):
-            try: st.session_state.scores = pd.read_csv(SCORE_FILE).to_dict(orient="records")[0]
+            try: st.session_state.swiss = pd.read_csv(SCORE_FILE).to_dict(orient="records")[0]
             except: pass
-        if "scores" not in st.session_state:
-            st.session_state.scores = {
-                "A1": players_list[0], "A2": players_list[1], "A3": players_list[2],
-                "B1": players_list[3], "B2": players_list[4], "B3": players_list[5],
-                "m1_s1": 0, "m1_s2": 0, "m2_s1": 0, "m2_s2": 0,
-                "m3_s1": 0, "m3_s2": 0, "m4_s1": 0, "m4_s2": 0,
-                "m5_s1": 0, "m5_s2": 0, "m6_s1": 0, "m6_s2": 0,
-                "r1_s1": 0, "r1_s2": 0, "r2_s1": 0, "r2_s2": 0,
-                "sf1_s1": 0, "sf1_s2": 0, "sf2_s1": 0, "sf2_s2": 0,
-                "f_s1": 0, "f_s2": 0, "bm_s1": 0, "bm_s2": 0,
+        if "swiss" not in st.session_state:
+            st.session_state.swiss = {
+                "current_round": 1,
+                "p1_1": players_list[0], "p1_2": players_list[1], "p1_s1": 0, "p1_s2": 0,
+                "p2_1": players_list[2], "p2_2": players_list[3], "p2_s1": 0, "p2_s2": 0,
+                "p3_1": players_list[4], "p3_2": players_list[5], "p3_s1": 0, "p3_s2": 0,
+                "p4_1": players_list[6], "p4_2": players_list[7], "p4_s1": 0, "p4_s2": 0,
+                "history": "", # 記錄前幾輪結果以計算積分
+                "sf1_s1": 0, "sf1_s2": 0, "sf2_s1": 0, "sf2_s2": 0, "f_s1": 0, "f_s2": 0, "bm_s1": 0, "bm_s2": 0
             }
 
-    s = st.session_state.scores
-    def save_scores():
-        pd.DataFrame([s]).to_csv(SCORE_FILE, index=False)
+    sw = st.session_state.swiss
+    def save_swiss(): pd.DataFrame([sw]).to_csv(SCORE_FILE, index=False)
 
-    # 🔑 管理者控制功能
+    # 管理功能
     if is_admin:
-        # 🎲 自動抽籤功能
-        st.sidebar.write("---")
-        st.sidebar.subheader("🎲 現場分組抽籤系統")
-        if st.sidebar.button("💥 開始現場隨機抽籤！", type="primary"):
-            pool = raw_players.copy()
-            while len(pool) < 6: pool.append(f"待定選手_{len(pool)+1}")
-            pool = pool[:6]
-            random.shuffle(pool)
-            s["A1"], s["A2"], s["A3"] = pool[0], pool[1], pool[2]
-            s["B1"], s["B2"], s["B3"] = pool[3], pool[4], pool[5]
-            save_scores()
-            st.sidebar.success("🎉 抽籤完成！名單已更新！")
-            st.rerun()
-
-        # ✍️ 手動調整選單
-        st.sidebar.write("---")
-        st.sidebar.subheader("✍️ 手動微調選單")
-        for key in ["A1", "A2", "A3", "B1", "B2", "B3"]:
-            if s[key] not in players_list: s[key] = players_list[0]
-        s["A1"] = st.sidebar.selectbox("A組 1號", players_list, index=players_list.index(s["A1"]))
-        s["A2"] = st.sidebar.selectbox("A組 2號", players_list, index=players_list.index(s["A2"]))
-        s["A3"] = st.sidebar.selectbox("A組 3號", players_list, index=players_list.index(s["A3"]))
-        s["B1"] = st.sidebar.selectbox("B組 1號", players_list, index=players_list.index(s["B1"]))
-        s["B2"] = st.sidebar.selectbox("B組 2號", players_list, index=players_list.index(s["B2"]))
-        s["B3"] = st.sidebar.selectbox("B組 3號", players_list, index=players_list.index(s["B3"]))
-        
-        if st.sidebar.button("💾 儲存目前所有比分狀態"):
-            save_scores()
-            st.sidebar.success("比分存檔成功！")
-        if st.sidebar.button("🔄 重設大賽（比分與選手全部歸零）"):
+        st.sidebar.subheader("🎲 大賽初始化 / 抽籤")
+        if st.sidebar.button("💥 生成第一輪隨機對戰組合", type="primary"):
+            random.shuffle(players_list)
+            sw["current_round"] = 1
+            sw["p1_1"], sw["p1_2"] = players_list[0], players_list[1]
+            sw["p2_1"], sw["p2_2"] = players_list[2], players_list[3]
+            sw["p3_1"], sw["p3_2"] = players_list[4], players_list[5]
+            sw["p4_1"], sw["p4_2"] = players_list[6], players_list[7]
+            sw["p1_s1"], sw["p1_s2"], sw["p2_s1"], sw["p2_s2"] = 0, 0, 0, 0
+            sw["p3_s1"], sw["p3_s2"], sw["p4_s1"], sw["p4_s2"] = 0, 0, 0, 0
+            sw["history"] = ""
+            save_swiss(); st.rerun()
+        if st.sidebar.button("🔄 全大賽完全歸零重置"):
             if os.path.exists(SCORE_FILE): os.remove(SCORE_FILE)
-            if os.path.exists(DATA_FILE): os.remove(DATA_FILE)
-            if "scores" in st.session_state: del st.session_state.scores
+            if "swiss" in st.session_state: del st.session_state.swiss
             st.rerun()
 
-    # 計算與顯示戰果
-    def get_rank(p1, p2, p3, m1_1, m1_2, m2_1, m2_2, m3_1, m3_2):
-        stats = {p1: {"wins": 0, "diff": 0}, p2: {"wins": 0, "diff": 0}, p3: {"wins": 0, "diff": 0}}
-        if m1_1 > m1_2: stats[p1]["wins"]+=1
-        elif m1_2 > m1_1: stats[p2]["wins"]+=1
-        stats[p1]["diff"] += (m1_1 - m1_2); stats[p2]["diff"] += (m1_2 - m1_1)
-        if m2_1 > m2_2: stats[p2]["wins"]+=1
-        elif m2_2 > m2_1: stats[p3]["wins"]+=1
-        stats[p2]["diff"] += (m2_1 - m2_2); stats[p3]["diff"] += (m2_2 - m2_1)
-        if m3_1 > m3_2: stats[p1]["wins"]+=1
-        elif m3_2 > m3_1: stats[p3]["wins"]+=1
-        stats[p1]["diff"] += (m3_1 - m3_2); stats[p3]["diff"] += (m3_2 - m3_1)
-        sorted_p = sorted(stats.items(), key=lambda x: (x[1]["wins"], x[1]["diff"]), reverse=True)
-        return [sorted_p[0][0], sorted_p[1][0], sorted_p[2][0]]
+    # 解析歷史與當前數據計算即時積分榜
+    def calc_standings():
+        stats = {p: {"wins": 0, "diff": 0} for p in players_list}
+        # 讀取歷史
+        if sw["history"]:
+            for match in sw["history"].split(";"):
+                if not match: continue
+                pa, pb, sa, sb = match.split(",")
+                sa, sb = int(sa), int(sb)
+                if sa > sb: stats[pa]["wins"] += 1
+                elif sb > sa: stats[pb]["wins"] += 1
+                stats[pa]["diff"] += (sa - sb); stats[pb]["diff"] += (sb - sa)
+        # 如果是當前正在打的輪次且已經打完，也計入排行預覽
+        if sw["current_round"] <= 3:
+            cur_matches = [(sw["p1_1"], sw["p1_2"], sw["p1_s1"], sw["p1_s2"]), (sw["p2_1"], sw["p2_2"], sw["p2_s1"], sw["p2_s2"]), (sw["p3_1"], sw["p3_2"], sw["p3_s1"], sw["p3_s2"]), (sw["p4_1"], sw["p4_2"], sw["p4_s1"], sw["p4_s2"])]
+            for pa, pb, sa, sb in cur_matches:
+                if sa > 0 or sb > 0:
+                    if sa > sb: stats[pa]["wins"] += 1
+                    elif sb > sa: stats[pb]["wins"] += 1
+                    stats[pa]["diff"] += (sa - sb); stats[pb]["diff"] += (sb - sa)
+        df_rank = pd.DataFrame.from_dict(stats, orient="index").reset_index().rename(columns={"index": "選手名稱", "wins": "總勝場", "diff": "總得分差"})
+        return df_rank.sort_values(by=["總勝場", "總得分差"], ascending=False).reset_index(drop=True)
 
-    rank_A = get_rank(s["A1"], s["A2"], s["A3"], s["m1_s1"], s["m1_s2"], s["m3_s1"], s["m3_s2"], s["m5_s1"], s["m5_s2"])
-    rank_B = get_rank(s["B1"], s["B2"], s["B3"], s["m2_s1"], s["m2_s2"], s["m4_s1"], s["m4_s2"], s["m6_s1"], s["m6_s2"])
+    df_current_rank = calc_standings()
 
-    # 📍 第一階段：小組循環賽 (max_value 已調至 10)
-    st.header("📍 第一階段：小組循環賽 (常規賽 6 場)")
-    col_a, col_b = st.columns(2)
-    
-    with col_a:
-        st.subheader("🌀 A 組 (循環賽)")
-        st.write(f"**【場次 1】** {s['A1']} vs {s['A2']}")
-        s["m1_s1"] = st.number_input(f"{s['A1']} 分數", min_value=0, max_value=10, value=int(s["m1_s1"]), key="m1_s1_input", disabled=not is_admin)
-        s["m1_s2"] = st.number_input(f"{s['A2']} 分數", min_value=0, max_value=10, value=int(s["m1_s2"]), key="m1_s2_input", disabled=not is_admin)
-        
-        st.write(f"**【場次 3】** {s['A2']} vs {s['A3']}")
-        s["m3_s1"] = st.number_input(f"{s['A2']} 分數 ", min_value=0, max_value=10, value=int(s["m3_s1"]), key="m3_s1_input", disabled=not is_admin)
-        s["m3_s2"] = st.number_input(f"{s['A3']} 分數 ", min_value=0, max_value=10, value=int(s["m3_s2"]), key="m3_s2_input", disabled=not is_admin)
-        
-        st.write(f"**【場次 5】** {s['A1']} vs {s['A3']}")
-        s["m5_s1"] = st.number_input(f"{s['A1']} 分數  ", min_value=0, max_value=10, value=int(s["m5_s1"]), key="m5_s1_input", disabled=not is_admin)
-        s["m5_s2"] = st.number_input(f"{s['A3']} 分數  ", min_value=0, max_value=10, value=int(s["m5_s2"]), key="m5_s2_input", disabled=not is_admin)
+    # 顯示瑞士輪進度
+    if sw["current_round"] <= 3:
+        st.header(f"📍 瑞士輪預賽：第 【{sw['current_round']} / 3】 輪 (10分制)")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.subheader(f"⚔️ 對決 1")
+            st.write(f"**{sw['p1_1']}** vs **{sw['p1_2']}**")
+            sw["p1_s1"] = st.number_input(f"{sw['p1_1']} 分數", min_value=0, max_value=10, value=int(sw["p1_s1"]), key="p1_s1_in", disabled=not is_admin)
+            sw["p1_s2"] = st.number_input(f"{sw['p1_2']} 分數", min_value=0, max_value=10, value=int(sw["p1_s2"]), key="p1_s2_in", disabled=not is_admin)
+            
+            st.subheader(f"⚔️ 對決 2")
+            st.write(f"**{sw['p2_1']}** vs **{sw['p2_2']}**")
+            sw["p2_s1"] = st.number_input(f"{sw['p2_1']} 分數", min_value=0, max_value=10, value=int(sw["p2_s1"]), key="p2_s1_in", disabled=not is_admin)
+            sw["p2_s2"] = st.number_input(f"{sw['p2_2']} 分數", min_value=0, max_value=10, value=int(sw["p2_s2"]), key="p2_s2_in", disabled=not is_admin)
+        with c2:
+            st.subheader(f"⚔️ 對決 3")
+            st.write(f"**{sw['p3_1']}** vs **{sw['p3_2']}**")
+            sw["p3_s1"] = st.number_input(f"{sw['p3_1']} 分數", min_value=0, max_value=10, value=int(sw["p3_s1"]), key="p3_s1_in", disabled=not is_admin)
+            sw["p3_s2"] = st.number_input(f"{sw['p3_2']} 分數", min_value=0, max_value=10, value=int(sw["p3_s2"]), key="p3_s2_in", disabled=not is_admin)
+            
+            st.subheader(f"⚔️ 對決 4")
+            st.write(f"**{sw['p4_1']}** vs **{sw['p4_2']}**")
+            sw["p4_s1"] = st.number_input(f"{sw['p4_1']} 分數", min_value=0, max_value=10, value=int(sw["p4_s1"]), key="p4_s1_in", disabled=not is_admin)
+            sw["p4_s2"] = st.number_input(f"{sw['p4_2']} 分數", min_value=0, max_value=10, value=int(sw["p4_s2"]), key="p4_s2_in", disabled=not is_admin)
 
-    with col_b:
-        st.subheader("🌀 B 組 (循環賽)")
-        st.write(f"**【場次 2】** {s['B1']} vs {s['B2']}")
-        s["m2_s1"] = st.number_input(f"{s['B1']} 分數", min_value=0, max_value=10, value=int(s["m2_s1"]), key="m2_s1_input", disabled=not is_admin)
-        s["m2_s2"] = st.number_input(f"{s['B2']} 分數", min_value=0, max_value=10, value=int(s["m2_s2"]), key="m2_s2_input", disabled=not is_admin)
-        
-        st.write(f"**【場次 4】** {s['B2']} vs {s['B3']}")
-        s["m4_s1"] = st.number_input(f"{s['B2']} 分數 ", min_value=0, max_value=10, value=int(s["m4_s1"]), key="m4_s1_input", disabled=not is_admin)
-        s["m4_s2"] = st.number_input(f"{s['B3']} 分數 ", min_value=0, max_value=10, value=int(s["m4_s2"]), key="m4_s2_input", disabled=not is_admin)
-        
-        st.write(f"**【場次 6】** {s['B1']} vs {s['B3']}")
-        s["m6_s1"] = st.number_input(f"{s['B1']} 分數   ", min_value=0, max_value=10, value=int(s["m6_s1"]), key="m6_s1_input", disabled=not is_admin)
-        s["m6_s2"] = st.number_input(f"{s['B3']} 分數   ", min_value=0, max_value=10, value=int(s["m6_s2"]), key="m6_s2_input", disabled=not is_admin)
-
-    st.write("---")
-    st.subheader("📊 目前小組排名預覽")
-    st.info(f"**🥇 A組第一 (直升四強):** {rank_A[0]} | 🥈 第二: {rank_A[1]} | 🥉 第三: {rank_A[2]}")
-    st.info(f"**🥇 B組第一 (直升四強):** {rank_B[0]} | 🥈 第二: {rank_B[1]} | 🥉 第三: {rank_B[2]}")
-
-    # 📍 第二階段：敗部復活挑戰賽 (max_value 已調至 10)
-    st.write("---")
-    st.header("🔥 第二階段：敗部復活挑戰賽")
-    col_r1, col_r2 = st.columns(2)
-    with col_r1:
-        st.subheader("⚔️ 敗部戰 1")
-        st.write(f"**A組第二** `{rank_A[1]}` vs **B組第三** `{rank_B[2]}`")
-        s["r1_s1"] = st.number_input(f"{rank_A[1]} 敗部分1", min_value=0, max_value=10, value=int(s["r1_s1"]), key="r1_s1_input", disabled=not is_admin)
-        s["r1_s2"] = st.number_input(f"{rank_B[2]} 敗部分2", min_value=0, max_value=10, value=int(s["r1_s2"]), key="r1_s2_input", disabled=not is_admin)
-        r1_winner = rank_A[1] if s["r1_s1"] > s["r1_s2"] else rank_B[2]
-    with col_r2:
-        st.subheader("⚔️ 敗部戰 2")
-        st.write(f"**B組第二** `{rank_B[1]}` vs **A組第三** `{rank_A[2]}`")
-        s["r2_s1"] = st.number_input(f"{rank_B[1]} 敗部分3", min_value=0, max_value=10, value=int(s["r2_s1"]), key="r2_s1_input", disabled=not is_admin)
-        s["r2_s2"] = st.number_input(f"{rank_A[2]} 敗部分4", min_value=0, max_value=10, value=int(s["r2_s2"]), key="r2_s2_input", disabled=not is_admin)
-        r2_winner = rank_B[1] if s["r2_s1"] > s["r2_s2"] else rank_A[2]
-
-    # 📍 第三階段：四強賽 (max_value 已調至 10)
-    st.write("---")
-    st.header("👑 第三階段：真正核心四強賽")
-    col_sf1, col_sf2 = st.columns(2)
-    with col_sf1:
-        st.subheader("🏆 四強賽 A")
-        st.write(f"**A組第一** `{rank_A[0]}` vs **敗部戰 2 勝者** `{r2_winner}`")
-        s["sf1_s1"] = st.number_input(f"{rank_A[0]} 四強分1", min_value=0, max_value=10, value=int(s["sf1_s1"]), key="sf1_s1_input", disabled=not is_admin)
-        s["sf1_s2"] = st.number_input(f"{r2_winner} 四強分2", min_value=0, max_value=10, value=int(s["sf1_s2"]), key="sf1_s2_input", disabled=not is_admin)
-        sf1_winner = rank_A[0] if s["sf1_s1"] > s["sf1_s2"] else r2_winner
-        sf1_loser = r2_winner if s["sf1_s1"] > s["sf1_s2"] else rank_A[0]
-    with col_sf2:
-        st.subheader("🏆 四強賽 B")
-        st.write(f"**B組第一** `{rank_B[0]}` vs **敗部戰 1 勝者** `{r1_winner}`")
-        s["sf2_s1"] = st.number_input(f"{rank_B[0]} 四強分3", min_value=0, max_value=10, value=int(s["sf2_s1"]), key="sf2_s1_input", disabled=not is_admin)
-        s["sf2_s2"] = st.number_input(f"{r1_winner} 四強分4", min_value=0, max_value=10, value=int(s["sf2_s2"]), key="sf2_s2_input", disabled=not is_admin)
-        sf2_winner = rank_B[0] if s["sf2_s1"] > s["sf2_s2"] else r1_winner
-        sf2_loser = r1_winner if s["sf2_s1"] > s["sf2_s2"] else rank_B[0]
-
-    # 📍 第四階段：決賽圈 (max_value 已調至 10)
-    st.write("---")
-    st.header("✨ 第四階段：榮譽決賽圈")
-    col_bm, col_f = st.columns(2)
-    with col_bm:
-        st.subheader("🥉 季軍賽 (銅牌戰)")
-        st.write(f"`{sf1_loser}` vs `{sf2_loser}`")
-        s["bm_s1"] = st.number_input(f"{sf1_loser} 決賽分1", min_value=0, max_value=10, value=int(s["bm_s1"]), key="bm_s1_input", disabled=not is_admin)
-        s["bm_s2"] = st.number_input(f"{sf2_loser} 決賽分2", min_value=0, max_value=10, value=int(s["bm_s2"]), key="bm_s2_input", disabled=not is_admin)
-    with col_f:
-        st.subheader("🥇 🚀 總冠軍賽 (金牌戰)")
-        st.write(f"👑 `{sf1_winner}` vs 👑 `{sf2_winner}`")
-        s["f_s1"] = st.number_input(f"{sf1_winner} 決賽分3", min_value=0, max_value=10, value=int(s["f_s1"]), key="f_s1_input", disabled=not is_admin)
-        s["f_s2"] = st.number_input(f"{sf2_winner} 決賽分4", min_value=0, max_value=10, value=int(s["f_s2"]), key="f_s2_input", disabled=not is_admin)
-
-    # 儲存每一步的比分狀態
-    if is_admin:
-        save_scores()
-
-    # 頒獎台
-    if s["f_s1"] > 0 or s["f_s2"] > 0:
+        if is_admin:
+            save_swiss()
+            if st.button("💾 確定本輪打完！生成下一輪/結算組合", type="primary"):
+                # 將當前結果塞入歷史
+                round_str = f"{sw['p1_1']},{sw['p1_2']},{sw['p1_s1']},{sw['p1_s2']};{sw['p2_1']},{sw['p2_2']},{sw['p2_s1']},{sw['p2_s2']};{sw['p3_1']},{sw['p3_2']},{sw['p3_s1']},{sw['p3_s2']};{sw['p4_1']},{sw['p4_2']},{sw['p4_s1']},{sw['p4_s2']}"
+                sw["history"] = (sw["history"] + ";" + round_str) if sw["history"] else round_str
+                
+                if sw["current_round"] < 3:
+                    sw["current_round"] += 1
+                    # 依據剛剛即時算出的戰績重新排序排下一輪（同勝場互咬）
+                    next_pool = calc_standings()["選手名稱"].tolist()
+                    sw["p1_1"], sw["p1_2"] = next_pool[0], next_pool[1]
+                    sw["p2_1"], sw["p2_2"] = next_pool[2], next_pool[3]
+                    sw["p3_1"], sw["p3_2"] = next_pool[4], next_pool[5]
+                    sw["p4_1"], sw["p4_2"] = next_pool[6], next_pool[7]
+                    sw["p1_s1"], sw["p1_s2"], sw["p2_s1"], sw["p2_s2"] = 0, 0, 0, 0
+                    sw["p3_s1"], sw["p3_s2"], sw["p4_s1"], sw["p4_s2"] = 0, 0, 0, 0
+                else:
+                    sw["current_round"] = 4 # 預賽結束，進入四強
+                save_swiss(); st.rerun()
+    else:
         st.write("---")
-        st.balloons()
-        st.header("🎉 👑 第一屆 戰鬥陀螺 BX 大賽 最終榮譽榜 👑 🎉")
-        champion = sf1_winner if s["f_s1"] > s["f_s2"] else sf2_winner
-        second_place = sf2_winner if s["f_s1"] > s["f_s2"] else sf1_winner
-        third_place = sf1_loser if s["bm_s1"] > s["bm_s2"] else sf2_loser
+
+    # 顯示即時瑞士輪大榜單
+    st.subheader("📊 瑞士輪即時總排行榜 (前四名晉級決賽)")
+    st.dataframe(df_current_rank)
+
+    # ════════════════════════════════════════════════════════════
+    # 👑 四強單敗淘汰賽圈 (第 4 輪起自動解鎖)
+    # ════════════════════════════════════════════════════════════
+    if sw["current_round"] >= 4:
+        st.write("---")
+        st.header("🔥 決賽圈：核心四強交叉單敗淘汰賽 (10分制)")
         
-        c1, c2, c3 = st.columns(3)
-        c1.metric("🥇 總冠軍 (金牌)", champion)
-        c2.metric("🥈 亞軍 (銀牌)", second_place)
-        c3.metric("🥉 季軍 (銅牌)", third_place)
+        # 鎖定預賽前四名
+        top_4 = df_current_rank["選手名稱"].tolist()[:4]
+        rank1, rank2, rank3, rank4 = top_4[0], top_4[1], top_4[2], top_4[3]
+        
+        col_sf1, col_sf2 = st.columns(2)
+        with col_sf1:
+            st.subheader("🏆 四強準決賽 A")
+            st.write(f"**預賽第 1 名** `{rank1}` vs **預賽第 4 名** `{rank4}`")
+            sw["sf1_s1"] = st.number_input(f"{rank1} 分", min_value=0, max_value=10, value=int(sw["sf1_s1"]), key="sf1_s1_idx", disabled=not is_admin)
+            sw["sf1_s2"] = st.number_input(f"{rank4} 分", min_value=0, max_value=10, value=int(sw["sf1_s2"]), key="sf1_s2_idx", disabled=not is_admin)
+            sf1_winner = rank1 if sw["sf1_s1"] > sw["sf1_s2"] else rank4
+            sf1_loser = rank4 if sw["sf1_s1"] > sw["sf1_s2"] else rank1
+        with col_sf2:
+            st.subheader("🏆 四強準決賽 B")
+            st.write(f"**預賽第 2 名** `{rank2}` vs **預賽第 3 名** `{rank3}`")
+            sw["sf2_s1"] = st.number_input(f"{rank2} 分 ", min_value=0, max_value=10, value=int(sw["sf2_s1"]), key="sf2_s1_idx", disabled=not is_admin)
+            sw["sf2_s2"] = st.number_input(f"{rank3} 分 ", min_value=0, max_value=10, value=int(s_win:=sw["sf2_s2"]), key="sf2_s2_idx", disabled=not is_admin)
+            sf2_winner = rank2 if sw["sf2_s1"] > sw["sf2_s2"] else rank3
+            sf2_loser = rank3 if sw["sf2_s1"] > sw["sf2_s2"] else rank2
+
+        st.write("---")
+        st.header("✨ 最終榮譽殿堂戰")
+        col_bm, col_f = st.columns(2)
+        with col_bm:
+            st.subheader("🥉 季軍賽 (銅牌爭奪戰)")
+            st.write(f"`{sf1_loser}` vs `{sf2_loser}`")
+            sw["bm_s1"] = st.number_input(f"{sf1_loser} 決賽分1", min_value=0, max_value=10, value=int(sw["bm_s1"]), key="bm_s1_idx", disabled=not is_admin)
+            sw["bm_s2"] = st.number_input(f"{sf2_loser} 決賽分2", min_value=0, max_value=10, value=int(sw["bm_s2"]), key="bm_s2_idx", disabled=not is_admin)
+        with col_f:
+            st.subheader("🥇 🚀 總冠軍賽 (金牌終極戰)")
+            st.write(f"👑 `{sf1_winner}` vs 👑 `{sf2_winner}`")
+            sw["f_s1"] = st.number_input(f"{sf1_winner} 決賽分3", min_value=0, max_value=10, value=int(sw["f_s1"]), key="f_s1_idx", disabled=not is_admin)
+            sw["f_s2"] = st.number_input(f"{sf2_winner} 決賽分4", min_value=0, max_value=10, value=int(sw["f_s2"]), key="f_s2_idx", disabled=not is_admin)
+
+        if is_admin: save_swiss()
+
+        # 頒獎台
+        if sw["f_s1"] > 0 or sw["f_s2"] > 0:
+            st.write("---")
+            st.balloons()
+            st.header("🎉 👑 第一屆 戰鬥陀螺 BX 瑞士輪大賽 最終榮譽榜 👑 🎉")
+            champion = sf1_winner if sw["f_s1"] > sw["f_s2"] else sf2_winner
+            second_place = sf2_winner if sw["f_s1"] > sw["f_s2"] else sf1_winner
+            third_place = sf1_loser if sw["bm_s1"] > sw["bm_s2"] else sf2_loser
+            
+            c1, c2, c3 = st.columns(3)
+            c1.metric("🥇 總冠軍 (金牌)", champion)
+            c2.metric("🥈 亞軍 (銀牌)", second_place)
+            c3.metric("🥉 季軍 (銅牌)", third_place)
