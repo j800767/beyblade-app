@@ -15,6 +15,37 @@ def load_data():
 
 def save_data(df): df.to_csv(DATA_FILE, index=False, encoding="utf-8-sig")
 
+# 📝 核心防呆檢查函式
+def check_inputs(name, b1, r1, bit1, b2, r2, bit2, b3, r3, bit3, b4, r4, bit4, is_edit=False, original_name=""):
+    # 1. 檢查名字
+    if not name.strip():
+        return False, "❌ 選手名稱不能留空！"
+    
+    # 如果是新增，或是修改時改了新名字，才需要檢查名字是否跟別人重複
+    if not is_edit or (is_edit and name.strip() != original_name):
+        if name.strip() in df_registrations["選手名稱"].values:
+            return False, f"❌ 選手名稱【{name.strip()}】已經有人登記過了！"
+
+    # 2. 檢查禁用卡表 (上蓋)
+    banned_keywords = ["天馬", "神杖", "鯊魚", "pegasus", "rod", "shark"]
+    blades = [str(b1), str(b2), str(b3), str(b4)]
+    for idx, b in enumerate(blades, 1):
+        for banned in banned_keywords:
+            if banned in b.lower():
+                return False, f"❌ 登記失敗！第 {idx} 顆陀螺的上蓋【{b}】屬於禁用零件（天馬/神杖/鯊魚）！"
+
+    # 3. 檢查固鎖 (Ratchet) 是否重複
+    ratchets = [r for r in [str(r1).strip(), str(r2).strip(), str(r3).strip(), str(r4).strip()] if r]
+    if len(ratchets) != len(set(ratchets)):
+        return False, "❌ 登記失敗！4 顆陀螺的「固鎖 (Ratchet)」存在重複零件，請重新配置！"
+
+    # 4. 檢查軸心 (Bit) 是否重複
+    bits = [b for b in [str(bit1).strip(), str(bit2).strip(), str(bit3).strip(), str(bit4).strip()] if b]
+    if len(bits) != len(set(bits)):
+        return False, "❌ 登記失敗！4 顆陀螺的「軸心 (Bit)」存在重複零件，請重新配置！"
+
+    return True, ""
+
 df_registrations = load_data()
 tab1, tab2 = st.tabs(["📝 選手零件登記與名單管理", "🏆 LOL版瑞士輪控制台"])
 
@@ -46,12 +77,14 @@ with tab1:
         submit_btn = st.form_submit_button("🚀 提交登記")
 
     if submit_btn:
-        if not player_name.strip() or player_name.strip() in df_registrations["選手名稱"].values:
-            st.error("❌ 名字留空或重複登記！")
+        # 執行防呆校驗
+        success, error_msg = check_inputs(player_name, b1, r1, bit1, b2, r2, bit2, b3, r3, bit3, b4, r4, bit4, is_edit=False)
+        if not success:
+            st.error(error_msg)
         else:
             df_registrations = pd.concat([df_registrations, pd.DataFrame([{"選手名稱": player_name.strip(), "陀螺1_上蓋": b1, "陀螺1_固鎖": r1, "陀螺1_軸心": bit1, "陀螺2_上蓋": b2, "陀螺2_固鎖": r2, "陀螺2_軸心": bit2, "陀螺3_上蓋": b3, "陀螺3_固鎖": r3, "陀螺3_軸心": bit3, "陀螺4_上蓋": b4, "陀螺4_固鎖": r4, "陀螺4_軸心": bit4}])], ignore_index=True)
             save_data(df_registrations)
-            st.success(f"🎉 成功登記！"); st.rerun()
+            st.success(f"🎉 成功登記選手：{player_name.strip()}！"); st.rerun()
 
     st.write("---")
     st.subheader("📊 目前已登記選手名單")
@@ -94,11 +127,16 @@ with tab1:
                 ebit4 = st.text_input("修改 4_軸心", value=str(p_row["陀螺4_軸心"]))
                 
             if st.button("💾 儲存修改內容", type="primary"):
-                # 先刪除舊的那一列，再塞入新修改的那一列
-                df_registrations = df_registrations[df_registrations["選手名稱"] != selected_player]
-                df_registrations = pd.concat([df_registrations, pd.DataFrame([{"選手名稱": edit_name.strip(), "陀螺1_上蓋": eb1, "陀螺1_固鎖": er1, "陀螺1_軸心": ebit1, "陀螺2_上蓋": eb2, "陀螺2_固鎖": er2, "陀螺2_軸心": ebit2, "陀螺3_上蓋": eb3, "陀螺3_固鎖": er3, "陀螺3_軸心": ebit3, "陀螺4_上蓋": eb4, "陀螺4_固鎖": er4, "陀螺4_軸心": ebit4}])], ignore_index=True)
-                save_data(df_registrations)
-                st.success(f"🎉 選手【{selected_player}】的資料已成功更新！"); st.rerun()
+                # 修改時同樣執行防呆校驗
+                success, error_msg = check_inputs(edit_name, eb1, er1, ebit1, eb2, er2, ebit2, eb3, er3, ebit3, eb4, er4, ebit4, is_edit=True, original_name=selected_player)
+                if not success:
+                    st.error(error_msg)
+                else:
+                    # 先刪除舊的那一列，再塞入新修改的那一列
+                    df_registrations = df_registrations[df_registrations["選手名稱"] != selected_player]
+                    df_registrations = pd.concat([df_registrations, pd.DataFrame([{"選手名稱": edit_name.strip(), "陀螺1_上蓋": eb1, "陀螺1_固鎖": er1, "陀螺1_軸心": ebit1, "陀螺2_上蓋": eb2, "陀螺2_固鎖": er2, "陀螺2_軸心": ebit2, "陀螺3_上蓋": eb3, "陀螺3_固鎖": er3, "陀螺3_軸心": ebit3, "陀螺4_上蓋": eb4, "陀螺4_固鎖": er4, "陀螺4_軸心": ebit4}])], ignore_index=True)
+                    save_data(df_registrations)
+                    st.success(f"🎉 選手【{selected_player}】的資料已成功更新！"); st.rerun()
                 
         with col_del:
             st.markdown("🗑️ **危險特區**")
@@ -240,6 +278,7 @@ with tab2:
                     lw["matches_num"] = len(next_matches)
                     for i, (pa, pb) in enumerate(next_matches):
                         idx = i + 1
+                        lw[f"m{idx}_p1 patches", lw[f"m{idx}_p2"]] = pa, pb
                         lw[f"m{idx}_p1"], lw[f"m{idx}_p2"] = pa, pb
                         lw[f"m{idx}_s1"], lw[f"m{idx}_s2"] = 0, 0
                         
