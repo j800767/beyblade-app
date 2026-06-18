@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import random
 
-st.set_page_config(page_title="戰鬥陀螺 LOL瑞士輪系統", page_icon="🌀", layout="wide")
+st.set_page_config(page_title="n三重盃戰鬥陀螺大賽比賽系統", page_icon="🌀", layout="wide")
 
 DATA_FILE = "beyblade_registrations.csv"
 SCORE_FILE = "tournament_scores.csv"
@@ -16,7 +16,7 @@ def load_data():
 def save_data(df): df.to_csv(DATA_FILE, index=False, encoding="utf-8-sig")
 
 df_registrations = load_data()
-tab1, tab2 = st.tabs(["📝 選手零件登記表單", "🏆 LOL版瑞士輪控制台"])
+tab1, tab2 = st.tabs(["📝 選手零件登記表單", "🏆 瑞士輪控制台"])
 
 st.sidebar.header("🔑 管理者驗證專區")
 admin_input = st.sidebar.text_input("輸入管理密碼", type="password")
@@ -26,7 +26,7 @@ is_admin = (admin_input == ADMIN_PASSWORD)
 # 【分頁一：選手登記】
 # ════════════════════════════════════════════════════════════
 with tab1:
-    st.title("🌀 戰鬥陀螺 8人零件登記 (LOL瑞士輪版)")
+    st.title("🌀 戰鬥陀螺 8人零件登記 (瑞士輪版)")
     st.markdown("### 📝 4分制規則：3勝晉級四強 / 3敗直接淘汰。固鎖與軸心不可重複。禁用：天馬、神杖、鯊魚。")
     
     with st.form("reg_form"):
@@ -265,7 +265,7 @@ with tab2:
         if lw["f_s1"] > 0 or lw["f_s2"] > 0:
             st.write("---")
             st.balloons()
-            st.header("🎉 👑 第一屆 戰鬥陀螺 BX 英雄聯盟版大賽 最終榮譽榜 👑 🎉")
+            st.header("🎉 👑 第一屆 三重盃 戰鬥陀螺 最終榮譽榜 👑 🎉")
             champion = sf1_winner if lw["f_s1"] > lw["f_s2"] else sf2_winner
             second_place = sf2_winner if lw["f_s1"] > lw["f_s2"] else sf1_winner
             third_place = sf1_loser if lw["bm_s1"] > lw["bm_s2"] else sf2_loser
