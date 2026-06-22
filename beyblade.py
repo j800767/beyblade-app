@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import random
 
-st.set_page_config(page_title="戰鬥陀螺 LOL瑞士輪系統", page_icon="🌀", layout="wide")
+st.set_page_config(page_title="戰鬥陀螺 瑞士輪系統", page_icon="🌀", layout="wide")
 
 DATA_FILE = "beyblade_registrations.csv"
 SCORE_FILE = "tournament_scores.csv"
@@ -33,7 +33,7 @@ def check_inputs(name, b1, r1, bit1, b2, r2, bit2, b3, r3, bit3, b4, r4, bit4, i
     return True, ""
 
 df_registrations = load_data()
-tab1, tab2, tab3 = st.tabs(["📝 選手零件登記與名單管理", "🏆 LOL版瑞士輪控制台", "📖 大賽官方規則說明圖"])
+tab1, tab2 = st.tabs(["📝 選手零件登記與名單管理", "🏆 瑞士輪控制台"])
 
 st.sidebar.header("🔑 管理者驗證專區")
 admin_input = st.sidebar.text_input("輸入管理密碼", type="password")
@@ -106,7 +106,7 @@ with tab1:
                 if not success: st.error(error_msg)
                 else:
                     df_registrations = df_registrations[df_registrations["選手名稱"] != selected_player]
-                    df_registrations = pd.concat([df_registrations, pd.DataFrame([{"選手名稱": edit_name.strip(), "陀螺1_上蓋": eb1, "陀螺1_固鎖": er1, "陀螺1_軸心": ebit1, "陀螺2_上蓋": eb2, "陀螺2_固鎖": er2, "陀螺2_軸心": ebit2, "陀螺3_上蓋": eb3, "陀螺3_固鎖": er3, "陀螺3_軸心": ebit3, "陀螺4_上蓋": eb4, "陀螺4_固鎖": er4, "陀螺4_軸心": ebit4}])], ignore_index=True)
+                    df_registrations = pd.concat([df_registrations, pd.DataFrame([{"選手名稱": edit_name.strip(), "陀螺1_上蓋": eb1, "陀螺1_固鎖": er1, "陀螺1_軸心": ebit1, "陀螺2_上蓋": eb2, "陀螺2_固鎖": er2, "陀螺2_軸心": ebit2, "陀螺3_上蓋": eb3, "陀螺3_固鎖": r3, "陀螺3_軸心": ebit3, "陀螺4_上蓋": eb4, "陀螺4_固鎖": er4, "陀螺4_軸心": ebit4}])], ignore_index=True)
                     save_data(df_registrations)
                     st.success(f"🎉 選手【{selected_player}】的資料已成功更新！"); st.rerun()
                 
@@ -195,6 +195,7 @@ with tab2:
             s1_key, s2_key = f"m{idx}_s1", f"m{idx}_s2"
             tag_key = f"m{idx}_tag"
             
+            # 確保欄位存在
             tag_val = lw.get(tag_key, "戰績對決")
             
             with cols[i % 2]:
@@ -224,18 +225,23 @@ with tab2:
                     lw["round"] += 1
                     active_players = [p for p in players_list if p not in q_list and p not in e_list]
                     
+                    # 🚀 精準 LOL 瑞士輪跨組配對演算法修正
                     groups = {}
                     for p in active_players:
                         groups.setdefault(current_rec[p]["w"], []).append(p)
                     
                     next_matches = []
-                    sorted_keys = sorted(groups.keys(), reverse=True)
+                    sorted_keys = sorted(groups.keys(), reverse=True) # 例如 [2, 1]
                     
+                    # 由高勝率往下配對
                     for k in sorted_keys:
                         random.shuffle(groups[k])
                     
+                    # 處理高勝場組（例如 2 勝組）
                     for k in sorted_keys:
+                        # 如果當前組別是奇數，且還有更低勝場的組別，就從低勝場組借走「第一個」來湊對
                         if len(groups[k]) % 2 != 0:
+                            # 往下找有人的組別
                             for next_k in sorted_keys:
                                 if next_k < k and len(groups[next_k]) > 0:
                                     cross_player = groups[next_k].pop(0)
@@ -243,17 +249,20 @@ with tab2:
                                     next_matches.append((lucky_player, cross_player, f"{k}勝-{next_k}勝 跨界戰"))
                                     break
                         
+                        # 剩下的人都是偶數，同組互咬
                         while len(groups[k]) >= 2:
                             p1 = groups[k].pop(0)
                             p2 = groups[k].pop(0)
                             next_matches.append((p1, p2, f"{k}勝{current_rec[p1]['l']}敗 同戰績組"))
                     
+                    # 安全防呆：萬一剩下一對散兵
                     flat_remain = []
                     for k, v in groups.items(): flat_remain.extend(v)
                     while len(flat_remain) >= 2:
                         p1, p2 = flat_remain.pop(0), flat_remain.pop(0)
                         next_matches.append((p1, p2, f"中段混合組"))
                     
+                    # 寫入下一輪欄位
                     lw["matches_num"] = len(next_matches)
                     for i, (pa, pb, tag_text) in enumerate(next_matches):
                         idx = i + 1
@@ -328,81 +337,3 @@ with tab2:
             c1.metric("🥇 總冠軍 (金牌)", champion)
             c2.metric("🥈 亞軍 (銀牌)", second_place)
             c3.metric("🥉 季軍 (銅牌)", third_place)
-
-# ════════════════════════════════════════════════════════════
-# 【分頁三：大賽官方規則與 go-shoot 對照說明圖】
-# ════════════════════════════════════════════════════════════
-with tab3:
-    st.title("📖 戰鬥陀螺 BX 8人瑞士輪賽事官方指南")
-    st.info("💡 主辦人與選手可隨時點閱本頁，對照 go-shoot 網站之產品規格與瑞士輪賽制走向。")
-    
-    st.subheader("📊 1. 8人 LOL標準瑞士輪賽事走向示意圖")
-    swiss_flowchart = '''
-【 8人 LOL標準瑞士輪賽事走向示意圖 】
-
-第一輪 (0-0)        第二輪             第三輪             第四輪             第五輪
-─────────────────────────────────────────────────────────────────────────────────────────
-[A,B,C,D,E,F,G,H]
-     │
-     ├── 贏家 (4人) ─► [1-0 組]
-     │                    │
-     │                    ├── 贏家 (2人) ─► [2-0 組]
-     │                    │                    │
-     │                    │                    ├── 贏家 (1人) ──►【3-0 晉級四強】(第1位)
-     │                    │                    │
-     │                    └── 輸家 (2人) ┐     └── 輸家 (1人) ┐
-     │                                   │                    │
-     │                                   ├─► [2-1 組] (3人) ◄─┘
-     │                                   │      │
-     │                    ┌── 贏家 (2人) ┘      ├── 2-1 互咬贏 ──►【3-1 晉級四強】
-     │                    │                     │
-     └── 輸家 (4人) ─► [0-1 組]                  ├── 跨界戰(2-1勝)►【3-1 晉級四強】
-                          │                     │
-                          ├── 贏家 (2人) ──► [1-1 組] (4人)  │ (若2-1輸或1-2互咬贏)
-                          │                     │            │
-                          └── 輸家 (2人) ┐     └── 兩兩互咬 ──┴─► [2-2 終極生死組] (2人或4人)
-                                         │                                │
-                                         ├─► [1-2 組] (3人) ◄─┐            └── 贏家 ──►【3-2 晉級四強】
-                                         │      │            │                  (輸家 2-3 淘汰)
-                                         │      ├── 跨界戰(1-2勝)►┘
-                          ┌── 贏家 (2人) ┘      │
-                          │                     ├── 1-2 互咬輸 ──►【1-3 淘汰出局】
-                          │                     │
-                          └── 輸家 (2人) ─────► [0-2 組]      │
-                                                 │            │
-                                                 └── 輸家 (1人) ──►【0-3 淘汰出局】
-─────────────────────────────────────────────────────────────────────────────────────────
-核心規則提要：
-累積【3勝】直接晉級四強！ │ 累積【3敗】直接淘汰出局！
-    '''
-    st.code(swiss_flowchart, language="text")
-    
-    st.write("---")
-    st.subheader("🚫 2. 賽事禁用零件卡表（對照 go-shoot 商品編號）")
-    
-    banned_data = {
-        "官方產品編號": ["UX-02 / BX-35", "BX-14 / BX-22 / BX-31", "BX-01 / BX-17 / BX-21"],
-        "禁用 Blade (刃擊環) 名稱": ["神杖獅鷲 / 神杖鯨魚 (Rod)", "鯊魚狂之 (Shark)", "天馬疾風 (Pegasus)"],
-        "限制說明": ["環境強度過高，本次賽事全面禁用", "環境強度過高，本次賽事全面禁用", "環境強度過高，本次賽事全面禁用"]
-    }
-    st.table(pd.DataFrame(banned_data))
-    
-    st.write("---")
-    st.subheader("🔄 3. 4分制 Deck 零件唯一性防呆規範")
-    
-    col_rule1, col_rule2 = st.columns(2)
-    with col_rule1:
-        st.markdown('''
-        #### ［ 陀螺三層結構 ］
-        * **BLADE 刃擊環 (最上層)**：
-          * 💡 允許重複（例如：可同時帶兩顆 獅子之爪）。
-        * **RATCHET 固鎖輪盤 (中層)**：
-          * 🚫 **全 4 顆絕對不可重複**（例如 5-60、9-60 在整套 Deck 裡只能各出現一次）。
-        * **BIT 軸心 (底層)**：
-          * 🚫 **全 4 顆絕對不可重複**（例如 F軸、B軸 只能各出現一次）。
-        ''')
-    with col_rule2:
-        st.warning('''
-        ⚠️ **特別提醒（一體型與特殊部件規範）：**
-        若選手登記包含如 **UX-04（異色魔龍）** 等自帶「Ratchet一體型」的特殊結構陀螺，該台陀螺將直接視為已佔用該款固鎖規格。選手其餘的 3 顆陀螺將不得再使用任何相同規格之固鎖部件。
-        ''')
