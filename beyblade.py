@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import random
 
-st.set_page_config(page_title="戰鬥陀螺 LOL瑞士輪系統", page_icon="🌀", layout="wide")
+st.set_page_config(page_title="三重盃 戰鬥陀螺 瑞士輪系統", page_icon="🌀", layout="wide")
 
 DATA_FILE = "beyblade_registrations.csv"
 SCORE_FILE = "tournament_scores.csv"
@@ -33,7 +33,7 @@ def check_inputs(name, b1, r1, bit1, b2, r2, bit2, b3, r3, bit3, b4, r4, bit4, i
     return True, ""
 
 df_registrations = load_data()
-tab1, tab2 = st.tabs(["📝 選手零件登記與名單管理", "🏆 LOL版瑞士輪控制台"])
+tab1, tab2 = st.tabs(["📝 選手零件登記與名單管理", "🏆 瑞士輪控制台"])
 
 st.sidebar.header("🔑 管理者驗證專區")
 admin_input = st.sidebar.text_input("輸入管理密碼", type="password")
@@ -125,7 +125,7 @@ with tab1:
 # 【分頁二：LOL 瑞士輪核心控制台】
 # ════════════════════════════════════════════════════════════
 with tab2:
-    st.title("🏆 LOL世界賽制：3勝晉級四強 / 3敗淘汰控制台")
+    st.title("🏆 瑞士輪賽制：3勝晉級四強 / 3敗淘汰控制台")
     
     raw_players = df_registrations["選手名稱"].tolist()
     while len(raw_players) < 8: raw_players.append(f"選手_{len(raw_players)+1}")
@@ -186,7 +186,7 @@ with tab2:
     records = get_current_records()
 
     if lw["stage"] == "swiss":
-        st.header(f"📍 LOL瑞士輪預賽：第 【{lw['round']}】 輪 (4分制)")
+        st.header(f"📍 瑞士輪預賽：第 【{lw['round']}】 輪 (4分制)")
         
         cols = st.columns(2)
         for i in range(int(lw["matches_num"])):
@@ -329,7 +329,7 @@ with tab2:
         if lw["f_s1"] > 0 or lw["f_s2"] > 0:
             st.write("---")
             st.balloons()
-            st.header("🎉 👑 第一屆 戰鬥陀螺 BX 英雄聯盟版大賽 最終榮譽榜 👑 🎉")
+            st.header("🎉 👑 第一屆 三重盃 戰鬥陀螺 大賽 最終榮譽榜 👑 🎉")
             champion = sf1_winner if lw["f_s1"] > lw["f_s2"] else sf2_winner
             second_place = sf2_winner if lw["f_s1"] > lw["f_s2"] else sf1_winner
             third_place = sf1_loser if lw["bm_s1"] > lw["bm_s2"] else sf2_loser
