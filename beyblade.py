@@ -15,15 +15,29 @@ def load_data():
 
 def save_data(df): df.to_csv(DATA_FILE, index=False, encoding="utf-8-sig")
 
-# 📝 核心防呆檢查函式（已移除禁卡表限制）
+# 📝 核心防呆檢查函式（已加入限制卡規則：神杖/鯊魚/天馬總共限帶1顆）
 def check_inputs(name, b1, r1, bit1, b2, r2, bit2, b3, r3, bit3, b4, r4, bit4, is_edit=False, original_name=""):
     if not name.strip(): return False, "❌ 選手名稱不能留空！"
     if not is_edit or (is_edit and name.strip() != original_name):
         if name.strip() in df_registrations["選手名稱"].values:
             return False, f"❌ 選手名稱【{name.strip()}】已經有人登記過了！"
             
-    # 【已解禁】移除天馬、神杖、鯊魚等禁用零件之關鍵字檢查判定
+    # 🔒 限制卡規則檢查：神杖、鯊魚、天馬（含英譯）總共只能出現 1 顆
+    restricted_keywords = ["天馬", "神杖", "鯊魚", "pegasus", "rod", "shark"]
+    blades = [str(b1).lower(), str(b2).lower(), str(b3).lower(), str(b4).lower()]
     
+    restricted_count = 0
+    detected_blades = []
+    for b in blades:
+        for keyword in restricted_keywords:
+            if keyword in b:
+                restricted_count += 1
+                detected_blades.append(b)
+                break # 這顆陀螺已判定含有限制零件，跳出內層避免重複計算
+                
+    if restricted_count > 1:
+        return False, f"❌ 登記失敗！【神杖/鯊魚/天馬】屬於限制零件，4顆陀螺中「總共只能裝配 1 顆」！目前偵測到 {restricted_count} 顆：{detected_blades}"
+        
     ratchets = [r for r in [str(r1).strip(), str(r2).strip(), str(r3).strip(), str(r4).strip()] if r]
     if len(ratchets) != len(set(ratchets)): return False, "❌ 登記失敗！4 顆陀螺的「固鎖 (Ratchet)」存在重複零件，請重新配置！"
     bits = [b for b in [str(bit1).strip(), str(bit2).strip(), str(bit3).strip(), str(bit4).strip()] if b]
@@ -45,8 +59,8 @@ else: st.sidebar.info("🔒 目前為訪客唯讀模式。")
 # ════════════════════════════════════════════════════════════
 with tab1:
     st.title("🌀 戰鬥陀螺 8人零件登記與後台管理")
-    # 調整文字說明，移除禁用零件告示
-    st.markdown("### 📝 4分制規則：3勝晉級四強 / 3敗直接淘汰。固鎖與軸心不可重複。")
+    # 更新規則說明公告
+    st.markdown("### 📝 4分制規則：3勝晉級四強 / 3敗直接淘汰。固鎖與軸心不可重複。⚠️ 限制：神杖、鯊魚、天馬全隊總共限帶 1 顆。")
     
     st.subheader("➕ 新增選手登記")
     with st.form("reg_form"):
