@@ -66,7 +66,7 @@ def save_finals(df):
 def load_team_data():
     if os.path.exists(TEAM_DATA_FILE): 
         df = pd.read_csv(TEAM_DATA_FILE)
-        df = df.fillna("") # 圖一修正：新版 Pandas 避免使用 inplace=True
+        df = df.fillna("") 
         return df
     columns = [
         "組別", "隊員別", "選手名稱", 
@@ -140,6 +140,7 @@ if main_mode == "個人賽 (瑞士輪+四強)":
     # --- Tab 1: 選手登記與管理 ---
     with tabs[0]:
         st.header("選手改造登記（4選3 備戰規則）")
+        st.markdown("⚠️ **個人禁卡限制**：個人的 4 顆陀螺中，【魔導神杖 / 鮫鯊狂鱗 / 空力天馬】**總共只能出現 1 顆**！且個人的固鎖與軸心不可重複。")
         if is_admin:
             with st.form("registration_form", clear_on_submit=True):
                 col_name, col_b1, col_b2, col_b3, col_b4 = st.columns([1.2, 2, 2, 2, 2])
@@ -162,13 +163,18 @@ if main_mode == "個人賽 (瑞士輪+四強)":
                     if not name.strip(): st.error("❌ 登記失敗：名稱不能為空！")
                     elif name.strip() in df_reg["選手名稱"].values: st.error(f"❌ 選手【{name}】已登記！")
                     else:
-                        ratchets, bits = [r1, r2, r3, r4], [bit1, bit2, bit3, bit4]
-                        if len(set(ratchets)) < 4 or len(set(bits)) < 4:
+                        ratchets = [r for r in [r1, r2, r3, r4] if r.strip()]
+                        bits = [b for b in [bit1, bit2, bit3, bit4] if b.strip()]
+                        
+                        if len(ratchets) != len(set(ratchets)) or len(bits) != len(set(bits)):
                             st.error("❌ 登記失敗：個人的 4 顆陀螺中「固鎖」或「軸心」有零件重複！")
                         else:
-                            rest_count = sum(1 for b in [b1, b2, b3, b4] if any(k in str(b).lower() for k in RESTRICTED_KEYWORDS))
+                            # 補上個人賽禁卡表驗證
+                            all_blades = [str(b1).lower(), str(b2).lower(), str(b3).lower(), str(b4).lower()]
+                            rest_count = sum(1 for b in all_blades if any(k in b for k in RESTRICTED_KEYWORDS))
+                            
                             if rest_count > 1:
-                                st.error(f"❌ 違規！4 顆內偵測到 {rest_count} 顆限制零件（神杖/鮫鯊/天馬），限帶 1 顆！")
+                                st.error(f"❌ 違規！個人的 4 顆內偵測到 {rest_count} 顆限制零件（神杖/鮫鯊/天馬），限帶 1 顆！")
                             else:
                                 new_player = {
                                     "選手名稱": name.strip(),
@@ -186,9 +192,7 @@ if main_mode == "個人賽 (瑞士輪+四強)":
         st.write("---")
         st.subheader(f"👥 已登記選手名單與配置總覽 (共 {len(df_reg)} 人)")
         if not df_reg.empty:
-            # 圖三修正：強制將欄位轉為字串處理，避免數字或 NaN 觸發 AttributeError
             df_display = df_reg.copy()
-            
             for i in range(1, 5):
                 df_display[f"陀螺{i}_上蓋"] = df_display[f"陀螺{i}_上蓋"].astype(str).str.strip()
                 df_display[f"陀螺{i}_固鎖"] = df_display[f"陀螺{i}_固鎖"].astype(str).str.strip()
@@ -202,7 +206,6 @@ if main_mode == "個人賽 (瑞士輪+四強)":
             show_cols = ["選手名稱", "💥 陀螺 1 配置", "💥 陀螺 2 配置", "💥 陀螺 3 配置", "💥 陀螺 4 配置", "勝場", "敗場", "退賽"]
             st.dataframe(df_display[show_cols], use_container_width=True)
 
-        # ====== ⚙️ 個人賽名單管理控制台 ======
         if is_admin and not df_reg.empty:
             st.write("---")
             st.subheader("⚙️ 個人賽名單管理控制台")
@@ -358,7 +361,6 @@ if main_mode == "個人賽 (瑞士輪+四強)":
                     df_finals = pd.DataFrame(finals_data)
                     save_finals(df_finals); st.rerun()
             else:
-                # 圖二修正：安全地用階段名稱來撈取對應資料行
                 semiA = df_finals[df_finals["階段"] == "準決賽A"].iloc[0]
                 semiB = df_finals[df_finals["階段"] == "準決賽B"].iloc[0]
                 place3 = df_finals[df_finals["階段"] == "季軍賽"].iloc[0]
@@ -393,7 +395,6 @@ if main_mode == "個人賽 (瑞士輪+四強)":
                     p3_p2 = place3['選手2']
                     st.write(f"**🥉【季軍賽】** {p3_p1} 🆚 {p3_p2} ➡️ 季軍：`{place3['勝者']}`")
                     
-                    # 必須雙方都有明確名字（非預設字串）才可以下拉選擇
                     if is_admin and p3_p1 != "準決賽A敗者" and p3_p2 != "準決賽B敗者" and place3["勝者"] == "尚未決定":
                         res3 = st.selectbox("回報季軍賽勝者", ["選擇", p3_p1, p3_p2], key="p3_s")
                         if res3 != "選擇":
@@ -534,7 +535,6 @@ elif main_mode == "雙人團體賽 (獨立區)":
         st.subheader("📊 當前已儲存的團體賽選手名單總覽")
         st.dataframe(df_teams, use_container_width=True)
 
-        # ====== ⚙️ 團體賽名單管理控制台 ======
         if is_admin:
             st.write("---")
             st.subheader("⚙️ 團體賽名單管理控制台")
@@ -622,7 +622,7 @@ elif main_mode == "雙人團體賽 (獨立區)":
                         sf2_win = st.selectbox("回報準決賽 2 勝者", ["選擇勝組", sf2['組別A'], sf2['組別B']], key="sel_sf2")
                         if sf2_win != "選擇勝組":
                             df_team_matches.loc[df_team_matches["場次編號"] == "SF2", "勝者"] = sf2_win
-                            df_team_matches.loc[df_team_matches["場cat編號"] == "F1", "組別B"] = sf2_win
+                            df_team_matches.loc[df_team_matches["場次編號"] == "F1", "組別B"] = sf2_win
                             save_team_matches(df_team_matches); st.rerun()
             st.write("---")
             with st.container():
