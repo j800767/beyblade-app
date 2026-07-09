@@ -120,7 +120,8 @@ st.sidebar.write("---")
 st.sidebar.header("🏆 賽制系統切換")
 main_mode = st.sidebar.radio("選擇要管理的賽制：", ["個人賽 (瑞士輪+四強)", "雙人團體賽 (獨立區)"])
 
-RESTRICTED_KEYWORDS = ["空力天馬", "魔導神杖", "鮫鯊狂鱗", "pegasus", "rod", "shark"]
+# 禁卡關鍵字名單（包含神杖、鯊魚、天馬及其俗稱與英文）
+RESTRICTED_KEYWORDS = ["空力天馬", "魔導神杖", "鮫鯊狂鱗", "神杖", "鯊魚", "pegasus", "rod", "shark"]
 
 # ==========================================
 # 4. 模式一：個人賽 (瑞士輪 3勝晉級四強)
@@ -174,7 +175,7 @@ if main_mode == "個人賽 (瑞士輪+四強)":
                             rest_count = sum(1 for b in all_blades if any(k in b for k in RESTRICTED_KEYWORDS))
                             
                             if rest_count > 1:
-                                st.error(f"❌ 違規！個人的 4 顆內偵測到 {rest_count} 顆限制零件（神杖/鮫鯊/天馬），限帶 1 顆！")
+                                st.error(f"❌ 違規！個人的 4 顆內偵測到 {rest_count} 顆限制零件（神杖/鯊魚/天馬），限帶 1 顆！")
                             else:
                                 new_player = {
                                     "選手名稱": name.strip(),
@@ -470,7 +471,7 @@ elif main_mode == "雙人團體賽 (獨立區)":
             for b in all_blades:
                 if any(keyword in b for keyword in RESTRICTED_KEYWORDS): restricted_count += 1
             if restricted_count > 1:
-                return False, f"❌ {team_name} 禁卡表違規！偵測到 {restricted_count} 顆限制零件（整組限 1 顆）！"
+                return False, f"❌ {team_name} 禁卡表違規！偵測到 {restricted_count} 顆限制零件（神杖/鯊魚/天馬，整組限 1 顆）！"
             return True, ""
 
         st.write("---")
