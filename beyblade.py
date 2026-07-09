@@ -176,7 +176,7 @@ if main_mode == "個人賽 (瑞士輪+四強)":
                                     "陀螺2_上蓋": b2, "陀螺2_固鎖": r2, "陀螺2_軸心": bit2,
                                     "陀螺3_上蓋": b3, "陀螺3_固鎖": r3, "陀螺3_軸心": bit3,
                                     "陀螺4_上蓋": b4, "陀螺4_固鎖": r4, "陀螺4_軸心": bit4,
-                                    "勝場": 0, "敗場": 0, "對手件分": 0, "總積分": 0, "Ref": "", "已對戰選手": "", "退賽": "否"
+                                    "勝場": 0, "敗場": 0, "對手件分": 0, "總積分": 0, "已對戰選手": "", "退賽": "否"
                                 }
                                 df_reg = pd.concat([df_reg, pd.DataFrame([new_player])], ignore_index=True)
                                 save_registrations(df_reg)
@@ -264,7 +264,6 @@ if main_mode == "個人賽 (瑞士輪+四強)":
                         save_matches(df_matches)
                         st.rerun()
                 
-                # 沒有賽程時也提供完全重置戰績按鈕
                 if is_admin and not df_reg.empty:
                     st.write("---")
                     st.subheader("⚙️ 預賽戰績管理")
@@ -377,7 +376,7 @@ if main_mode == "個人賽 (瑞士輪+四強)":
                     st.markdown("### 🥇 獎牌總決賽 (Finals)")
                     st.write(f"**🥉【季軍賽】** {place3['選手1']} 🆚 {place3['選手2']} ➡️ 季軍：`{place3['勝者']}`")
                     if is_admin and semiA["勝者"] != "尚未決定" and semiB["勝者"] != "尚未決定" and place3["勝者"] == "尚未決定":
-                        res3 = st.selectbox("回報季軍賽勝者", ["選擇", place3['選手1'], place3['selectbox']], key="p3_s")
+                        res3 = st.selectbox("回報季軍賽勝者", ["選擇", place3['選手1'], place3['選手2']], key="p3_s")
                         if res3 != "選擇":
                             loss3 = place3['選手2'] if res3 == place3['選手1'] else place3['選手1']
                             df_finals.loc[df_finals["階段"] == "季軍賽", ["勝者", "敗者"]] = [res3, loss3]
