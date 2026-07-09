@@ -184,9 +184,21 @@ if main_mode == "個人賽 (瑞士輪+四強)":
                                 st.rerun()
         
         st.write("---")
-        st.subheader(f"👥 已登記選手名單 (共 {len(df_reg)} 人)")
+        st.subheader(f"👥 已登記選手名單與配置總覽 (共 {len(df_reg)} 人)")
         if not df_reg.empty:
-            st.dataframe(df_reg[["選手名稱", "陀螺1_上蓋", "陀螺2_上蓋", "陀螺3_上蓋", "陀螺4_上蓋", "勝場", "敗場", "退賽"]], use_container_width=True)
+            # 建立可讀性更高的對齊型展示 Dataframe
+            df_display = df_reg.copy()
+            
+            # 將上蓋、固鎖、軸心結合成一個欄位方便閱讀，格式如: "空力天馬 (7-60 / A)"
+            for i in range(1, 5):
+                df_display[f"💥 陀螺 {i} 配置"] = df_display.apply(
+                    lambda row: f"{row[f'陀螺{i}_上蓋']} ({row[f'陀螺{i}_固鎖']} / {row[f'陀螺{i}_軸心']})"
+                    if row[f'陀螺{i}_上蓋'].strip() else "未配置", axis=1
+                )
+            
+            # 挑選要展示的精美欄位
+            show_cols = ["選手名稱", "💥 陀螺 1 配置", "💥 陀螺 2 配置", "💥 陀螺 3 配置", "💥 陀螺 4 配置", "勝場", "敗場", "退賽"]
+            st.dataframe(df_display[show_cols], use_container_width=True)
 
         # ====== ⚙️ 個人賽名單管理控制台 ======
         if is_admin and not df_reg.empty:
@@ -270,6 +282,7 @@ if main_mode == "個人賽 (瑞士輪+四強)":
                     if st.button("🚨 徹底重置所有人戰績與對戰紀錄（戰績歸零）", type="secondary", use_container_width=True):
                         df_reg["勝場"] = 0
                         df_reg["敗場"] = 0
+                        df_reg["聯絡電話"] = "" # 避免欄位遺失
                         df_reg["已對戰選手"] = ""
                         save_registrations(df_reg)
                         save_matches(None)
@@ -594,7 +607,7 @@ elif main_mode == "雙人團體賽 (獨立區)":
                 c_info, c_score = st.columns([3, 1])
                 with c_info:
                     st.markdown(f"#### 📅 準決賽 2 (Match 2)")
-                    st.write(f"**{sf2['組別A']}** {get_team_members_str(sf2['組別A'])}  🆚  **{sf2['組別B']}** {get_team_members_str(sf2['組別B'])}")
+                    st.write(f"**{sf2['組telA']}** {get_team_members_str(sf2['組別A'])}  🆚  **{sf2['組別B']}** {get_team_members_str(sf2['組別B'])}")
                 with c_score:
                     if is_admin and sf2['勝者'] == "尚未決定":
                         sf2_win = st.selectbox("回報準決賽 2 勝者", ["選擇勝組", sf2['組別A'], sf2['組別B']], key="sel_sf2")
