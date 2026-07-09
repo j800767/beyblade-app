@@ -23,7 +23,7 @@ def check_inputs(name, b1, r1, bit1, b2, r2, bit2, b3, r3, bit3, b4, r4, bit4, i
             return False, f"❌ 選手名稱【{name.strip()}】已經有人登記過了！"
             
     # 🔒 限制卡規則檢查：神杖、鯊魚、天馬（含英譯）總共只能出現 1 顆
-    restricted_keywords = ["天馬", "神杖", "鯊魚", "pegasus", "rod", "shark"]
+    restricted_keywords = ["空力天馬", "魔導神杖", "鮫鯊狂鱗", "pegasus", "rod", "shark"]
     blades = [str(b1).lower(), str(b2).lower(), str(b3).lower(), str(b4).lower()]
     
     restricted_count = 0
@@ -36,7 +36,7 @@ def check_inputs(name, b1, r1, bit1, b2, r2, bit2, b3, r3, bit3, b4, r4, bit4, i
                 break # 這顆陀螺已判定含有限制零件，跳出內層避免重複計算
                 
     if restricted_count > 1:
-        return False, f"❌ 登記失敗！【神杖/鯊魚/天馬】屬於限制零件，4顆陀螺中「總共只能裝配 1 顆」！目前偵測到 {restricted_count} 顆：{detected_blades}"
+        return False, f"❌ 登記失敗！【魔導神杖/鮫鯊狂鱗/空力天馬】屬於限制零件，4顆陀螺中「總共只能裝配 1 顆」！目前偵測到 {restricted_count} 顆：{detected_blades}"
         
     ratchets = [r for r in [str(r1).strip(), str(r2).strip(), str(r3).strip(), str(r4).strip()] if r]
     if len(ratchets) != len(set(ratchets)): return False, "❌ 登記失敗！4 顆陀螺的「固鎖 (Ratchet)」存在重複零件，請重新配置！"
@@ -60,7 +60,7 @@ else: st.sidebar.info("🔒 目前為訪客唯讀模式。")
 with tab1:
     st.title("🌀 戰鬥陀螺 8人零件登記與後台管理")
     # 更新規則說明公告
-    st.markdown("### 📝 4分制規則：3勝晉級四強 / 3敗直接淘汰。固鎖與軸心不可重複。⚠️ 限制：神杖、鯊魚、天馬全隊總共限帶 1 顆。")
+    st.markdown("### 📝 4分制規則：3勝晉級四強 / 3敗直接淘汰。固鎖與軸心不可重複。⚠️ 限制：魔導神杖、鮫鯊狂鱗、空力天馬全隊總共限帶 1 顆。")
     
     st.subheader("➕ 新增選手登記")
     with st.form("reg_form"):
