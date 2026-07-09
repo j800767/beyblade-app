@@ -16,12 +16,16 @@ TEAM_DATA_FILE = "team_players_registration.csv" # 團體賽檔案
 ADMIN_PASSWORD = "admin"
 
 # ==========================================
-# 2. 資料存取核心函式
+# 2. 資料存取核心函式 (已修正新版 Pandas 相容性)
 # ==========================================
 def load_registrations():
     if os.path.exists(REG_FILE):
         df = pd.read_csv(REG_FILE)
-        df.fillna("", inplace=True)
+        # 修正：新版 Pandas 不支援 inplace=True，改用賦值寫法
+        df = df.fillna("")
+        # 強制確保對戰歷史欄位是字串型態，防止 split 炸開
+        if "已對戰選手" in df.columns:
+            df["已對戰選手"] = df["已對戰選手"].astype(str)
         return df
     return pd.DataFrame(columns=[
         "選手名稱", "陀螺1_上蓋", "陀螺1_固鎖", "陀螺1_軸心",
@@ -35,7 +39,9 @@ def save_registrations(df):
 
 def load_matches():
     if os.path.exists(MATCH_FILE):
-        return pd.read_csv(MATCH_FILE)
+        df = pd.read_csv(MATCH_FILE)
+        df = df.fillna("")
+        return df
     return None
 
 def save_matches(df):
@@ -47,7 +53,8 @@ def save_matches(df):
 def load_team_data():
     if os.path.exists(TEAM_DATA_FILE): 
         df = pd.read_csv(TEAM_DATA_FILE)
-        df.fillna("", inplace=True)
+        # 修正：拔除 inplace=True
+        df = df.fillna("")
         return df
     # 初始化 4 個組 (A, B, C, D) 共 8 個名額的空表格
     columns = [
@@ -60,7 +67,7 @@ def load_team_data():
         default_rows.append({"組別": team, "隊員別": "隊員 1", "選手名稱": ""})
         default_rows.append({"組別": team, "隊員別": "隊員 2", "選手名稱": ""})
     df = pd.DataFrame(default_rows, columns=columns)
-    df.fillna("", inplace=True)
+    df = df.fillna("")
     return df
 
 def save_team_data(df): 
@@ -198,7 +205,6 @@ if main_mode == "個人賽 (瑞士輪)":
                 st.success("🛰️ 目前沒有進行中的輪次。")
                 if is_admin:
                     if st.button("🎲 依積分自動生成下一輪對戰 (Swiss Pairing)", type="primary", use_container_width=True):
-                        # 簡易瑞士輪配對演算法
                         players_sorted = df_reg[df_reg["退賽"] != "是"].sort_values(by=["總積分", "勝場"], ascending=False)["選手名稱"].tolist()
                         
                         paired = set()
@@ -208,9 +214,11 @@ if main_mode == "個人賽 (瑞士輪)":
                             p1 = players_sorted[i]
                             if p1 in paired: continue
                             
-                            # 尋找未對戰過且積分最接近的對手
-                            p1_history = str(df_reg[df_reg["選手名稱"] == p1]["已對戰選手"].values[0]).split(",")
-                            p1_history = [p.strip() for p in p1_history if p.strip()]
+                            # 修正：讀取對局歷史時強制轉成字串，防範 NaN 浮點數錯誤
+                            p1_hist_str = str(df_reg[df_reg["選手名稱"] == p1]["已對戰選手"].values[0])
+                            # 支持逗號或分號的分隔防呆
+                            p1_history = p1_hist_str.replace(";", ",").split(",")
+                            p1_history = [p.strip() for p in p1_history if p.strip() and p != "nan"]
                             
                             found_opponent = False
                             for j in range(i + 1, len(players_sorted)):
@@ -225,7 +233,6 @@ if main_mode == "個人賽 (瑞士輪)":
                                     break
                             
                             if not found_opponent:
-                                # 若都對戰過，直接抓下一個落單的
                                 for j in range(i + 1, len(players_sorted)):
                                     p2 = players_sorted[j]
                                     if p2 not in paired:
@@ -235,7 +242,6 @@ if main_mode == "個人賽 (瑞士輪)":
                                         found_opponent = True
                                         break
                                         
-                        # 處理奇數人數落單
                         for p in players_sorted:
                             if p not in paired:
                                 matches.append({"選手A": p, "選手B": "BYE (輪空)", "勝者": p})
@@ -247,7 +253,6 @@ if main_mode == "個人賽 (瑞士輪)":
             else:
                 st.subheader("🔥 當前輪次對戰表")
                 
-                # 顯示對戰表與回報
                 for idx, row in df_matches.iterrows():
                     pA, pB, winner = row["選手A"], row["選手B"], row["勝者"]
                     
@@ -264,12 +269,10 @@ if main_mode == "個人賽 (瑞士輪)":
                                     st.rerun()
                         st.write("---")
                         
-                # 提交本輪結果，結算分數
                 if is_admin:
                     all_reported = all(df_matches["勝者"] != "尚未決定")
                     if all_reported:
                         if st.button("🏁 確認本輪所有成績，結算並寫入積分表", type="primary", use_container_width=True):
-                            # 更新每位選手的勝場與對戰歷史
                             for _, match in df_matches.iterrows():
                                 pA, pB, winner = match["選手A"], match["選手B"], match["勝者"]
                                 
@@ -281,13 +284,15 @@ if main_mode == "個人賽 (瑞士輪)":
                                     idxA = df_reg[df_reg["選手名稱"] == pA].index[0]
                                     idxB = df_reg[df_reg["選手名稱"] == pB].index[0]
                                     
-                                    # 記錄對局歷史
+                                    # 修正：讀取舊歷史時強制轉 str，排除 nan
                                     histA = str(df_reg.at[idxA, "已對戰選手"])
+                                    histA = "" if histA == "nan" else histA
                                     df_reg.at[idxA, "已對戰選手"] = f"{histA},{pB}" if histA else pB
+                                    
                                     histB = str(df_reg.at[idxB, "已對戰選手"])
+                                    histB = "" if histB == "nan" else histB
                                     df_reg.at[idxB, "已對戰選手"] = f"{histB},{pA}" if histB else pA
                                     
-                                    # 分數結算 (贏者3分，輸者0分)
                                     if winner == pA:
                                         df_reg.at[idxA, "勝場"] += 1
                                         df_reg.at[idxA, "總積分"] += 3
@@ -295,17 +300,19 @@ if main_mode == "個人賽 (瑞士輪)":
                                         df_reg.at[idxB, "勝場"] += 1
                                         df_reg.at[idxB, "總積分"] += 3
                                         
-                            # 重新計算對手件分 (Buchholz Score)
                             for idx, row in df_reg.iterrows():
-                                enemies = str(row["已對戰選手"]).split(",")
+                                # 修正：讀取歷史轉成字串，防止對手件分計算崩潰
+                                enemies_str = str(row["已對戰選手"]).replace(";", ",")
+                                enemies = enemies_str.split(",")
                                 enemy_points = 0
                                 for e in enemies:
-                                    if e.strip() and e in df_reg["選手名稱"].values:
-                                        enemy_points += df_reg[df_reg["選手名稱"] == e]["總積分"].values[0]
+                                    e_clean = e.strip()
+                                    if e_clean and e_clean != "nan" and e_clean in df_reg["選手名稱"].values:
+                                        enemy_points += df_reg[df_reg["選手名稱"] == e_clean]["總積分"].values[0]
                                 df_reg.at[idx, "對手件分"] = enemy_points
                                 
                             save_registrations(df_reg)
-                            save_matches(None) # 清除當前輪次，準備下一輪
+                            save_matches(None)
                             st.success("分數結算成功！本輪賽事結束。")
                             st.rerun()
                     else:
@@ -320,7 +327,6 @@ if main_mode == "個人賽 (瑞士輪)":
     with tabs[2]:
         st.header("📊 賽事當前即時排行榜")
         if not df_reg.empty:
-            # 依總積分 -> 對手件分 -> 勝場 排序
             leaderboard = df_reg.sort_values(by=["總積分", "對手件分", "勝場"], ascending=False).reset_index(drop=True)
             leaderboard.index += 1
             st.dataframe(leaderboard[["選手名稱", "勝場", "對手件分", "總積分", "退賽"]], use_container_width=True)
@@ -340,25 +346,20 @@ elif main_mode == "雙人團體賽 (獨立區)":
     st.markdown("### 📝 賽制規則：共 4 個組，每組固定 2 人，每人登記 2 顆陀螺。")
     st.markdown("⚠️ **整組禁卡限制**：該組兩位隊員（**共 4 顆陀螺**）中，【魔導神杖 / 鮫鯊狂鱗 / 空力天馬】**總共只能出現 1 顆**！且個人配置的固鎖與軸心不可重複。")
     
-    # 核心防呆檢查函式
     def validate_team_setup(team_name, p1_data, p2_data):
-        # 1. 檢查名字是否有填寫
         if not p1_data["name"].strip() or not p2_data["name"].strip():
             return False, f"❌ {team_name} 驗證失敗：兩位隊員的「選手名稱」皆不能留空！"
             
-        # 2. 檢查個人零件重複 (隊員1)
         p1_ratchets = [r for r in [p1_data["r1"], p1_data["r2"]] if r.strip()]
         p1_bits = [b for b in [p1_data["bit1"], p1_data["bit2"]] if b.strip()]
         if len(p1_ratchets) != len(set(p1_ratchets)): return False, f"❌ {team_name} 驗證失敗：{p1_data['name']} 的「固鎖(Ratchet)」重複零件！"
         if len(p1_bits) != len(set(p1_bits)): return False, f"❌ {team_name} 驗證失敗：{p1_data['name']} 的「軸心(Bit)」重複零件！"
         
-        # 3. 檢查個人零件重複 (隊員2)
         p2_ratchets = [r for r in [p2_data["r1"], p2_data["r2"]] if r.strip()]
         p2_bits = [b for b in [p2_data["bit1"], p2_data["bit2"]] if b.strip()]
         if len(p2_ratchets) != len(set(p2_ratchets)): return False, f"❌ {team_name} 驗證失敗：{p2_data['name']} 的「固鎖(Ratchet)」重複零件！"
         if len(p2_bits) != len(set(p2_bits)): return False, f"❌ {team_name} 驗證失敗：{p2_data['name']} 的「軸心(Bit)」重複零件！"
 
-        # 4. 🔒 全組禁卡表聯合大檢查（兩人的陀螺加起來共 4 顆）
         all_blades = [
             str(p1_data["b1"]).lower(), str(p1_data["b2"]).lower(),
             str(p2_data["b1"]).lower(), str(p2_data["b2"]).lower()
@@ -378,18 +379,14 @@ elif main_mode == "雙人團體賽 (獨立區)":
             
         return True, ""
 
-    # 渲染 4 個組別的獨立輸入區
     st.write("---")
     form_cols = st.columns(2)
-
-    # 用於暫存畫面上輸入資料的字典
     ui_inputs = {}
 
     for idx, team in enumerate(["A組", "B組", "C組", "D組"]):
         with form_cols[idx % 2]:
             st.subheader(f"🛡️ 團體賽 - {team} 配置面板")
             
-            # 抓取現有舊資料
             row_p1 = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 1")].iloc[0]
             row_p2 = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 2")].iloc[0]
             
@@ -417,14 +414,12 @@ elif main_mode == "雙人團體賽 (獨立區)":
                 p2_r2 = st.text_input("陀螺2_固鎖", value=str(row_p2["陀螺2_固鎖"]), key=f"{team}_p2_r2", disabled=not is_admin)
                 p2_bit2 = st.text_input("陀螺2_軸心", value=str(row_p2["陀螺2_軸心"]), key=f"{team}_p2_bit2", disabled=not is_admin)
                 
-            # 將資料打包
             ui_inputs[team] = {
                 "p1": {"name": p1_name, "b1": p1_b1, "r1": p1_r1, "bit1": p1_bit1, "b2": p1_b2, "r2": p1_r2, "bit2": p1_bit2},
                 "p2": {"name": p2_name, "b1": p2_b1, "r1": p2_r1, "bit1": p2_bit1, "b2": p2_b2, "r2": p2_r2, "bit2": p2_bit2}
             }
             st.write("---")
 
-    # 儲存按鈕處理
     if is_admin:
         if st.button("💾 驗證禁卡表並儲存 4 組團體賽名單", type="primary", use_container_width=True):
             passed_all = True
@@ -433,7 +428,6 @@ elif main_mode == "雙人團體賽 (獨立區)":
                 p1_in = ui_inputs[team]["p1"]
                 p2_in = ui_inputs[team]["p2"]
                 
-                # 如果整組都是完全沒填寫的狀態，跳過不檢查
                 if not p1_in["name"].strip() and not p2_in["name"].strip():
                     continue
                     
