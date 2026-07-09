@@ -27,7 +27,6 @@ def load_registrations():
         if "已對戰選手" in df.columns:
             df["已對戰選手"] = df["已對戰選手"].astype(str)
         return df
-    # 擴充為 4 顆陀螺的欄位結構
     return pd.DataFrame(columns=[
         "選手名稱", 
         "陀螺1_上蓋", "陀螺1_固鎖", "陀螺1_軸心",
@@ -127,7 +126,6 @@ if main_mode == "個人賽 (瑞士輪)":
         
         if is_admin:
             with st.form("registration_form", clear_on_submit=True):
-                # 切成五等分欄位：名稱 + 4 顆陀螺
                 col_name, col_b1, col_b2, col_b3, col_b4 = st.columns([1.2, 2, 2, 2, 2])
                 
                 with col_name:
@@ -165,11 +163,9 @@ if main_mode == "個人賽 (瑞士輪)":
                         ratchets = [r1, r2, r3, r4]
                         bits = [bit1, bit2, bit3, bit4]
                         
-                        # 檢查 4 顆零件是否重複
                         if len(set(ratchets)) < 4 or len(set(bits)) < 4:
                             st.error("❌ 登記失敗：個人的 4 顆陀螺中「固鎖(Ratchet)」或「軸心(Bit)」有零件重複，請更換！")
                         else:
-                            # 檢查 4 顆中限制零件數量
                             rest_count = sum(1 for b in blades if any(k in str(b).lower() for k in RESTRICTED_KEYWORDS))
                             if rest_count > 1:
                                 st.error(f"❌ 違規！在登記的 4 顆陀螺中偵測到 {rest_count} 顆限制零件（神杖/鮫鯊/天馬），每人最多只能帶 1 顆備戰！")
@@ -192,9 +188,7 @@ if main_mode == "個人賽 (瑞士輪)":
         st.write("---")
         st.subheader(f"👥 已登記選手名單 (共 {len(df_reg)} 人)")
         if not df_reg.empty:
-            # 讓名單可以一併預覽 4 顆陀螺的上蓋
             display_cols = ["選手名稱", "陀螺1_上蓋", "陀螺2_上蓋", "陀螺3_上蓋", "陀螺4_上蓋", "退賽"]
-            # 萬一舊檔案缺少陀螺4欄位，自動補空值避免報錯
             for c in display_cols:
                 if c not in df_reg.columns: df_reg[c] = ""
             st.dataframe(df_reg[display_cols], use_container_width=True)
@@ -475,6 +469,49 @@ elif main_mode == "雙人團體賽 (獨立區)":
         st.subheader("📊 當前已儲存的團體賽選手名單總覽")
         st.dataframe(df_teams, use_container_width=True)
 
+        # ====== 💥 新增：團體賽名單管理控制台 (刪除與重置功能) ======
+        if is_admin:
+            st.write("---")
+            st.subheader("⚙️ 團體賽名單管理控制台")
+            st.markdown("💡 選手若不小心打錯零件或名字，可在下方單獨清除該組資料重新填寫。")
+            
+            del_col1, del_col2 = st.columns([2, 1])
+            with del_col1:
+                target_team = st.selectbox("選擇要刪除並清空的組別", ["A組", "B組", "C組", "D組"])
+            with del_col2:
+                st.markdown("<br>", unsafe_allow_html=True) # 稍微對齊按鈕
+                if st.button(f"🗑️ 清空 {target_team} 資料", use_container_width=True):
+                    # 將選定組別的文字全部刷白空字串
+                    df_teams.loc[df_teams["組別"] == target_team, [
+                        "選手名稱", "陀螺1_上蓋", "陀螺1_固鎖", "陀螺1_軸心", 
+                        "陀螺2_上蓋", "陀螺2_固鎖", "陀2_軸心"
+                    ]] = ""
+                    # 舊欄位名稱防呆，確保所有衍生欄位一致
+                    for col in df_teams.columns:
+                        if col != "組別" and col != "隊員別":
+                            df_teams.loc[df_teams["組別"] == target_team, col] = ""
+                            
+                    save_team_data(df_teams)
+                    st.warning(f"已成功清除【{target_team}】的所有選手及陀螺登記資料。")
+                    st.rerun()
+            
+            if st.button("🚨 一鍵重置並【清空所有 4 組】名單資料", type="secondary", use_container_width=True):
+                # 完全重設為全新的空表格
+                columns = [
+                    "組別", "隊員別", "選手名稱", 
+                    "陀螺1_上蓋", "陀螺1_固鎖", "陀螺1_軸心", 
+                    "陀螺2_上蓋", "陀螺2_固鎖", "陀螺2_軸心"
+                ]
+                default_rows = []
+                for team in ["A組", "B組", "C組", "D組"]:
+                    default_rows.append({"組別": team, "隊員別": "隊員 1", "選手名稱": ""})
+                    default_rows.append({"組別": team, "隊員別": "隊員 2", "選手名稱": ""})
+                df_reset = pd.DataFrame(default_rows, columns=columns)
+                df_reset = df_reset.fillna("")
+                save_team_data(df_reset)
+                st.error("💥 團體賽所有組別名單已完全清空重置！")
+                st.rerun()
+
     # --- 團體賽分頁 2：單敗淘汰賽賽程區 ---
     with team_tabs[1]:
         st.header("🏆 4強團體單敗淘汰賽程")
@@ -515,7 +552,7 @@ elif main_mode == "雙人團體賽 (獨立區)":
                 
             with b_col2:
                 st.markdown("<br><br><br><br>", unsafe_allow_html=True)
-                st.warning(f"👑 **{f1['階段']}**\n\n【{f1['組別A']}】 vs 【{f1['組別B']}']\n\n ➡️ 總冠軍：`{f1['勝者']}`")
+                st.warning(f"👑 **{f1['階段']}**\n\n【{f1['組別A']}】 vs 【{f1['組別B']}】\n\n ➡️ 總冠軍：`{f1['勝者']}`")
                 
             with b_col3:
                 st.markdown("<br><br><br><br>", unsafe_allow_html=True)
