@@ -15,17 +15,15 @@ def load_data():
 
 def save_data(df): df.to_csv(DATA_FILE, index=False, encoding="utf-8-sig")
 
-# 📝 核心防呆檢查函式
+# 📝 核心防呆檢查函式（已移除禁卡表限制）
 def check_inputs(name, b1, r1, bit1, b2, r2, bit2, b3, r3, bit3, b4, r4, bit4, is_edit=False, original_name=""):
     if not name.strip(): return False, "❌ 選手名稱不能留空！"
     if not is_edit or (is_edit and name.strip() != original_name):
         if name.strip() in df_registrations["選手名稱"].values:
             return False, f"❌ 選手名稱【{name.strip()}】已經有人登記過了！"
-    banned_keywords = ["天馬", "神杖", "鯊魚", "pegasus", "rod", "shark"]
-    blades = [str(b1), str(b2), str(b3), str(b4)]
-    for idx, b in enumerate(blades, 1):
-        for banned in banned_keywords:
-            if banned in b.lower(): return False, f"❌ 登記失敗！第 {idx} 顆陀螺的上蓋【{b}】屬於禁用零件（天馬/神杖/鯊魚）！"
+            
+    # 【已解禁】移除天馬、神杖、鯊魚等禁用零件之關鍵字檢查判定
+    
     ratchets = [r for r in [str(r1).strip(), str(r2).strip(), str(r3).strip(), str(r4).strip()] if r]
     if len(ratchets) != len(set(ratchets)): return False, "❌ 登記失敗！4 顆陀螺的「固鎖 (Ratchet)」存在重複零件，請重新配置！"
     bits = [b for b in [str(bit1).strip(), str(bit2).strip(), str(bit3).strip(), str(bit4).strip()] if b]
@@ -47,7 +45,8 @@ else: st.sidebar.info("🔒 目前為訪客唯讀模式。")
 # ════════════════════════════════════════════════════════════
 with tab1:
     st.title("🌀 戰鬥陀螺 8人零件登記與後台管理")
-    st.markdown("### 📝 4分制規則：3勝晉級四強 / 3敗直接淘汰。固鎖與軸心不可重複。禁用：天馬、神杖、鯊魚。")
+    # 調整文字說明，移除禁用零件告示
+    st.markdown("### 📝 4分制規則：3勝晉級四強 / 3敗直接淘汰。固鎖與軸心不可重複。")
     
     st.subheader("➕ 新增選手登記")
     with st.form("reg_form"):
@@ -106,7 +105,7 @@ with tab1:
                 if not success: st.error(error_msg)
                 else:
                     df_registrations = df_registrations[df_registrations["選手名稱"] != selected_player]
-                    df_registrations = pd.concat([df_registrations, pd.DataFrame([{"選手名稱": edit_name.strip(), "陀螺1_上蓋": eb1, "陀螺1_固鎖": er1, "陀螺1_軸心": ebit1, "陀螺2_上蓋": eb2, "陀螺2_固鎖": er2, "陀螺2_軸心": ebit2, "陀螺3_上蓋": eb3, "陀螺3_固鎖": r3, "陀螺3_軸心": ebit3, "陀螺4_上蓋": eb4, "陀螺4_固鎖": er4, "陀螺4_軸心": ebit4}])], ignore_index=True)
+                    df_registrations = pd.concat([df_registrations, pd.DataFrame([{"選手名稱": edit_name.strip(), "陀螺1_上蓋": eb1, "陀螺1_固鎖": er1, "陀螺1_軸心": ebit1, "陀螺2_上蓋": eb2, "陀螺2_固鎖": er2, "陀螺2_軸心": ebit2, "陀螺3_上蓋": eb3, "陀螺3_固鎖": er3, "陀螺3_軸心": ebit3, "陀螺4_上蓋": eb4, "陀螺4_固鎖": er4, "陀螺4_軸心": ebit4}])], ignore_index=True)
                     save_data(df_registrations)
                     st.success(f"🎉 選手【{selected_player}】的資料已成功更新！"); st.rerun()
                 
@@ -122,7 +121,7 @@ with tab1:
             st.rerun()
 
 # ════════════════════════════════════════════════════════════
-# 【分頁二：LOL 瑞士輪核心控制台】
+# 【分頁二：瑞士輪核心控制台】
 # ════════════════════════════════════════════════════════════
 with tab2:
     st.title("🏆 瑞士輪賽制：3勝晉級四強 / 3敗淘汰控制台")
@@ -195,7 +194,6 @@ with tab2:
             s1_key, s2_key = f"m{idx}_s1", f"m{idx}_s2"
             tag_key = f"m{idx}_tag"
             
-            # 確保欄位存在
             tag_val = lw.get(tag_key, "戰績對決")
             
             with cols[i % 2]:
@@ -225,23 +223,18 @@ with tab2:
                     lw["round"] += 1
                     active_players = [p for p in players_list if p not in q_list and p not in e_list]
                     
-                    # 🚀 精準 LOL 瑞士輪跨組配對演算法修正
                     groups = {}
                     for p in active_players:
                         groups.setdefault(current_rec[p]["w"], []).append(p)
                     
                     next_matches = []
-                    sorted_keys = sorted(groups.keys(), reverse=True) # 例如 [2, 1]
+                    sorted_keys = sorted(groups.keys(), reverse=True)
                     
-                    # 由高勝率往下配對
                     for k in sorted_keys:
                         random.shuffle(groups[k])
                     
-                    # 處理高勝場組（例如 2 勝組）
                     for k in sorted_keys:
-                        # 如果當前組別是奇數，且還有更低勝場的組別，就從低勝場組借走「第一個」來湊對
                         if len(groups[k]) % 2 != 0:
-                            # 往下找有人的組別
                             for next_k in sorted_keys:
                                 if next_k < k and len(groups[next_k]) > 0:
                                     cross_player = groups[next_k].pop(0)
@@ -249,20 +242,17 @@ with tab2:
                                     next_matches.append((lucky_player, cross_player, f"{k}勝-{next_k}勝 跨界戰"))
                                     break
                         
-                        # 剩下的人都是偶數，同組互咬
                         while len(groups[k]) >= 2:
                             p1 = groups[k].pop(0)
                             p2 = groups[k].pop(0)
                             next_matches.append((p1, p2, f"{k}勝{current_rec[p1]['l']}敗 同戰績組"))
                     
-                    # 安全防呆：萬一剩下一對散兵
                     flat_remain = []
                     for k, v in groups.items(): flat_remain.extend(v)
                     while len(flat_remain) >= 2:
                         p1, p2 = flat_remain.pop(0), flat_remain.pop(0)
                         next_matches.append((p1, p2, f"中段混合組"))
                     
-                    # 寫入下一輪欄位
                     lw["matches_num"] = len(next_matches)
                     for i, (pa, pb, tag_text) in enumerate(next_matches):
                         idx = i + 1
