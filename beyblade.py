@@ -15,7 +15,7 @@ FINALS_FILE = "finals_matches.csv"             # 四強單淘汰檔案
 TEAM_DATA_FILE = "team_players_registration.csv" # 團體賽名單檔案
 TEAM_MATCH_FILE = "team_matches.csv"           # 團體賽淘汰賽賽程檔案
 
-ADMIN_PASSWORD = "admin"
+ADMIN_PASSWORD = "admin"  # 管理員預設密碼
 
 # 7 人單循環 21 場固定最佳賽程表 (避免連續上場)
 SCHEDULE_21 = [
@@ -107,16 +107,29 @@ df_teams = load_team_data()
 df_team_matches = load_team_matches()
 
 # ==========================================
-# 3. 側邊欄：權限與賽制切換
+# 3. 側邊欄：權限與賽制切換 (使用 Session State 登入鎖定)
 # ==========================================
-st.sidebar.header("🔑 管理者驗證專區")
-admin_input = st.sidebar.text_input("輸入管理密碼", type="password")
-is_admin = (admin_input == ADMIN_PASSWORD)
+if "is_admin" not in st.session_state:
+    st.session_state["is_admin"] = False
 
-if is_admin:
-    st.sidebar.success("🔓 管理員權限已開啟")
+st.sidebar.header("🔑 管理者驗證專區")
+
+if not st.session_state["is_admin"]:
+    admin_input = st.sidebar.text_input("輸入管理密碼", type="password", key="pwd_input")
+    if st.sidebar.button("🔑 登入系統", use_container_width=True):
+        if admin_input.strip() == ADMIN_PASSWORD:
+            st.session_state["is_admin"] = True
+            st.sidebar.success("🔓 驗證成功！")
+            st.rerun()
+        else:
+            st.sidebar.error("❌ 密碼錯誤！")
 else:
-    st.sidebar.info("🔒 目前為訪客唯讀模式")
+    st.sidebar.success("🔓 管理員權限已開啟")
+    if st.sidebar.button("🔒 登出管理員", use_container_width=True):
+        st.session_state["is_admin"] = False
+        st.rerun()
+
+is_admin = st.session_state["is_admin"]
 
 st.sidebar.write("---")
 st.sidebar.header("🏆 賽制系統切換")
