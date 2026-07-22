@@ -42,7 +42,8 @@ def load_registrations():
         "陀螺1_上蓋", "陀螺1_固鎖", "陀螺1_軸心",
         "陀螺2_上蓋", "陀螺2_固鎖", "陀螺2_軸心",
         "陀螺3_上蓋", "陀螺3_固鎖", "陀螺3_軸心",
-        "陀螺4_上蓋", "陀螺4_固鎖", "陀螺4_軸心"
+        "陀螺4_上蓋", "陀螺4_固鎖", "陀螺4_軸心",
+        "陀螺5_上蓋", "陀螺5_固鎖", "陀螺5_軸心"
     ])
 
 def save_registrations(df):
@@ -131,11 +132,11 @@ if main_mode == "個人賽 (7人單循環+4強)":
     
     # --- Tab 1: 選手登記與管理 ---
     with tabs[0]:
-        st.header("選手改造登記（4選3 備戰規則）")
-        st.markdown("⚠️ **個人禁卡限制**：個人的 4 顆陀螺中，【魔導神杖 / 鮫鯊狂鱗 / 空力天馬】**總共只能出現 1 顆**！且個人的固鎖與軸心不可重複。")
+        st.header("選手改造登記（5選3 備戰規則）")
+        st.markdown("⚠️ **個人禁卡限制**：個人的 5 顆陀螺中，【魔導神杖 / 鮫鯊狂鱗 / 空力天馬】**總共只能出現 1 顆**！且個人的固鎖與軸心不可重複。")
         if is_admin:
             with st.form("registration_form", clear_on_submit=True):
-                col_name, col_b1, col_b2, col_b3, col_b4 = st.columns([1.2, 2, 2, 2, 2])
+                col_name, col_b1, col_b2, col_b3, col_b4, col_b5 = st.columns([1.2, 2, 2, 2, 2, 2])
                 with col_name: name = st.text_input("選手名稱*")
                 with col_b1:
                     st.markdown("**陀螺 1**")
@@ -149,6 +150,9 @@ if main_mode == "個人賽 (7人單循環+4強)":
                 with col_b4:
                     st.markdown("**陀螺 4**")
                     b4, r4, bit4 = st.text_input("上蓋 4"), st.text_input("固鎖 4"), st.text_input("軸心 4")
+                with col_b5:
+                    st.markdown("**陀螺 5**")
+                    b5, r5, bit5 = st.text_input("上蓋 5"), st.text_input("固鎖 5"), st.text_input("軸心 5")
                     
                 submit_reg = st.form_submit_button("📥 驗證並新增登記", use_container_width=True)
                 if submit_reg:
@@ -156,17 +160,17 @@ if main_mode == "個人賽 (7人單循環+4強)":
                     elif name.strip() in df_reg["選手名稱"].values: st.error(f"❌ 選手【{name}】已登記！")
                     elif len(df_reg) >= 7: st.error("❌ 登記失敗：個人賽限定 7 人，已滿額！")
                     else:
-                        ratchets = [r for r in [r1, r2, r3, r4] if r.strip()]
-                        bits = [b for b in [bit1, bit2, bit3, bit4] if b.strip()]
+                        ratchets = [r for r in [r1, r2, r3, r4, r5] if r.strip()]
+                        bits = [b for b in [bit1, bit2, bit3, bit4, bit5] if b.strip()]
                         
                         if len(ratchets) != len(set(ratchets)) or len(bits) != len(set(bits)):
-                            st.error("❌ 登記失敗：個人的 4 顆陀螺中「固鎖」或「軸心」有零件重複！")
+                            st.error("❌ 登記失敗：個人的 5 顆陀螺中「固鎖」或「軸心」有零件重複！")
                         else:
-                            all_blades = [str(b1).lower(), str(b2).lower(), str(b3).lower(), str(b4).lower()]
+                            all_blades = [str(b1).lower(), str(b2).lower(), str(b3).lower(), str(b4).lower(), str(b5).lower()]
                             rest_count = sum(1 for b in all_blades if any(k in b for k in RESTRICTED_KEYWORDS))
                             
                             if rest_count > 1:
-                                st.error(f"❌ 違規！個人的 4 顆內偵測到 {rest_count} 顆限制零件（神杖/鯊魚/天馬），限帶 1 顆！")
+                                st.error(f"❌ 違規！個人的 5 顆內偵測到 {rest_count} 顆限制零件（神杖/鯊魚/天馬），限帶 1 顆！")
                             else:
                                 new_player = {
                                     "編號": 0,
@@ -175,6 +179,7 @@ if main_mode == "個人賽 (7人單循環+4強)":
                                     "陀螺2_上蓋": b2, "陀螺2_固鎖": r2, "陀螺2_軸心": bit2,
                                     "陀螺3_上蓋": b3, "陀螺3_固鎖": r3, "陀螺3_軸心": bit3,
                                     "陀螺4_上蓋": b4, "陀螺4_固鎖": r4, "陀螺4_軸心": bit4,
+                                    "陀螺5_上蓋": b5, "陀螺5_固鎖": r5, "陀螺5_軸心": bit5,
                                 }
                                 df_reg = pd.concat([df_reg, pd.DataFrame([new_player])], ignore_index=True)
                                 save_registrations(df_reg)
@@ -185,12 +190,12 @@ if main_mode == "個人賽 (7人單循環+4強)":
         st.subheader(f"👥 已登記選手名單與配置總覽 (共 {len(df_reg)} / 7 人)")
         if not df_reg.empty:
             df_display = df_reg.copy()
-            for i in range(1, 5):
+            for i in range(1, 6):
                 df_display[f"💥 陀螺 {i} 配置"] = df_display.apply(
                     lambda row: f"{row[f'陀螺{i}_上蓋']} ({row[f'陀螺{i}_固鎖']}/{row[f'陀螺{i}_軸心']})"
                     if row[f'陀螺{i}_上蓋'] else "未配置", axis=1
                 )
-            show_cols = ["編號", "選手名稱", "💥 陀螺 1 配置", "💥 陀螺 2 配置", "💥 陀螺 3 配置", "💥 陀螺 4 配置"]
+            show_cols = ["編號", "選手名稱", "💥 陀螺 1 配置", "💥 陀螺 2 配置", "💥 陀螺 3 配置", "💥 陀螺 4 配置", "💥 陀螺 5 配置"]
             st.dataframe(df_display[show_cols], use_container_width=True)
 
         if is_admin:
@@ -234,7 +239,7 @@ if main_mode == "個人賽 (7人單循環+4強)":
                 if os.path.exists(REG_FILE): os.remove(REG_FILE)
                 save_matches(None)
                 save_finals(None)
-                st.error("💥 個人赛所有登記資料、對戰賽程與數據已完全清空！")
+                st.error("💥 個人賽所有登記資料、對戰賽程與數據已完全清空！")
                 st.rerun()
 
     # 取得編號對照字典
@@ -262,18 +267,18 @@ if main_mode == "個人賽 (7人單循環+4強)":
 
             st.info(f"### 🥊 第 {selected_match_idx} 場對戰\n\n### **🔴 {p1_id}號 {p1_name}**  🆚  **🔵 {p2_id}號 {p2_name}**")
             
-            # 展示雙方裝備
+            # 展示雙方裝備 (5顆)
             df_p1 = df_reg[df_reg["編號"] == p1_id].iloc[0]
             df_p2 = df_reg[df_reg["編號"] == p2_id].iloc[0]
             
             m_col1, m_col2 = st.columns(2)
             with m_col1:
                 st.markdown(f"**🔴 {p1_id}號 {p1_name} 裝備配置：**")
-                for i in range(1, 5):
+                for i in range(1, 6):
                     st.write(f"{i}. **{df_p1[f'陀螺{i}_上蓋']}** ({df_p1[f'陀螺{i}_固鎖']} / {df_p1[f'陀螺{i}_軸心']})")
             with m_col2:
                 st.markdown(f"**🔵 {p2_id}號 {p2_name} 裝備配置：**")
-                for i in range(1, 5):
+                for i in range(1, 6):
                     st.write(f"{i}. **{df_p2[f'陀螺{i}_上蓋']}** ({df_p2[f'陀螺{i}_固鎖']} / {df_p2[f'陀螺{i}_軸心']})")
 
             st.write("---")
@@ -294,27 +299,30 @@ if main_mode == "個人賽 (7人單循環+4強)":
                 w_str = player_map.get(current_winner_id, "尚未決定") if current_winner_id != 0 else "尚未比賽"
                 st.write(f"**當前比賽結果**：`{w_str}`")
 
-    # 計算得分與戰績
+    # 計算得分與戰績（精確計算勝場與敗場，未比賽場次不計敗）
     def calculate_standings():
-        scores = {p_id: 0 for p_id in range(1, 8)}
+        wins_dict = {p_id: 0 for p_id in range(1, 8)}
+        losses_dict = {p_id: 0 for p_id in range(1, 8)}
         h2h = {}
         if df_matches is not None:
             for _, r in df_matches.iterrows():
                 w = int(r["勝者_編號"])
                 p1, p2 = int(r["選手A_編號"]), int(r["選手B_編號"])
                 if w != 0:
-                    scores[w] += 1
+                    l = p2 if w == p1 else p1
+                    wins_dict[w] += 1
+                    losses_dict[l] += 1
                     h2h[(p1, p2)] = w
                     h2h[(p2, p1)] = w
         
         # 排序邏輯：勝場數優先，同分比較對戰勝負 (Head-to-Head)
         def sort_key(p_id):
-            wins = scores[p_id]
+            wins = wins_dict[p_id]
             h2h_wins = sum(1 for (k, v) in h2h.items() if k[0] == p_id and v == p_id)
             return (wins, h2h_wins)
 
         ranked_ids = sorted(range(1, 8), key=sort_key, reverse=True)
-        return scores, ranked_ids
+        return wins_dict, losses_dict, ranked_ids
 
     # --- Tab 3: 四強決賽 ---
     with tabs[2]:
@@ -324,7 +332,7 @@ if main_mode == "個人賽 (7人單循環+4強)":
         if completed_count < 21:
             st.warning(f"⏳ 預賽尚未結束（目前完成 {completed_count}/21 場），預賽打完後將自動開啟四強決賽！")
         else:
-            scores, ranked_ids = calculate_standings()
+            wins_dict, losses_dict, ranked_ids = calculate_standings()
             rank1_id, rank2_id, rank3_id, rank4_id = ranked_ids[:4]
             
             p1_str = f"第1名: {rank1_id}號 {player_map[rank1_id]}"
@@ -404,16 +412,17 @@ if main_mode == "個人賽 (7人單循環+4強)":
         if df_reg.empty or (df_reg["編號"] == 0).all():
             st.info("尚無排名數據（需先完成盲抽編號與比賽）。")
         else:
-            scores, ranked_ids = calculate_standings()
+            wins_dict, losses_dict, ranked_ids = calculate_standings()
             table_data = []
             for rank, p_id in enumerate(ranked_ids, 1):
-                wins = scores[p_id]
+                wins = wins_dict[p_id]
+                losses = losses_dict[p_id]
                 table_data.append({
                     "預賽排名": f"第 {rank} 名",
                     "編號": f"{p_id} 號",
                     "選手名稱": player_map.get(p_id, "未定"),
                     "勝場數": f"{wins} 勝",
-                    "敗場數": f"{6 - wins} 敗",
+                    "敗場數": f"{losses} 敗",
                     "狀態": "🟢 晉級4強" if rank <= 4 else "🔴 預賽淘汰"
                 })
             st.table(table_data)
