@@ -173,31 +173,32 @@ if main_mode == "個人賽 (7人單循環+4強)":
                     elif name.strip() in df_reg["選手名稱"].values: st.error(f"❌ 選手【{name}】已登記！")
                     elif len(df_reg) >= 7: st.error("❌ 登記失敗：個人賽限定 7 人，已滿額！")
                     else:
-                        ratchets = [r for r in [r1, r2, r3, r4, r5] if r.strip()]
-                        bits = [b for b in [bit1, bit2, bit3, bit4, bit5] if b.strip()]
-                        
-                        if len(ratchets) != len(set(ratchets)) or len(bits) != len(set(bits)):
-                            st.error("❌ 登記失敗：個人的 5 顆陀螺中「固鎖」或「軸心」有零件重複！")
+                        # 1. 濾除空白，僅抓取有效填寫之零件
+                        all_blades = [b.strip().lower() for b in [b1, b2, b3, b4, b5] if b.strip()]
+                        ratchets = [r.strip().lower() for r in [r1, r2, r3, r4, r5] if r.strip()]
+                        bits = [bit.strip().lower() for bit in [bit1, bit2, bit3, bit4, bit5] if bit.strip()]
+
+                        # 2. 獨立檢查禁卡數量（優先檢查）
+                        rest_count = sum(1 for b in all_blades if any(k in b for k in RESTRICTED_KEYWORDS))
+
+                        if rest_count > 1:
+                            st.error(f"❌ 違規！偵測到 {rest_count} 顆限制零件（神杖/鯊魚/天馬），個人的 5 顆配置內限帶 1 顆！")
+                        elif len(ratchets) != len(set(ratchets)) or len(bits) != len(set(bits)):
+                            st.error("❌ 登記失敗：個人的陀螺配置中「固鎖」或「軸心」有零件重複！")
                         else:
-                            all_blades = [str(b1).lower(), str(b2).lower(), str(b3).lower(), str(b4).lower(), str(b5).lower()]
-                            rest_count = sum(1 for b in all_blades if any(k in b for k in RESTRICTED_KEYWORDS))
-                            
-                            if rest_count > 1:
-                                st.error(f"❌ 違規！個人的 5 顆內偵測到 {rest_count} 顆限制零件（神杖/鯊魚/天馬），限帶 1 顆！")
-                            else:
-                                new_player = {
-                                    "編號": 0,
-                                    "選手名稱": name.strip(),
-                                    "陀螺1_上蓋": b1, "陀螺1_固鎖": r1, "陀螺1_軸心": bit1,
-                                    "陀螺2_上蓋": b2, "陀螺2_固鎖": r2, "陀螺2_軸心": bit2,
-                                    "陀螺3_上蓋": b3, "陀螺3_固鎖": r3, "陀螺3_軸心": bit3,
-                                    "陀螺4_上蓋": b4, "陀螺4_固鎖": r4, "陀螺4_軸心": bit4,
-                                    "陀螺5_上蓋": b5, "陀螺5_固鎖": r5, "陀螺5_軸心": bit5,
-                                }
-                                df_reg = pd.concat([df_reg, pd.DataFrame([new_player])], ignore_index=True)
-                                save_registrations(df_reg)
-                                st.success(f"🎉 選手【{name}】成功通過驗證，完成登記！")
-                                st.rerun()
+                            new_player = {
+                                "編號": 0,
+                                "選手名稱": name.strip(),
+                                "陀螺1_上蓋": b1, "陀螺1_固鎖": r1, "陀螺1_軸心": bit1,
+                                "陀螺2_上蓋": b2, "陀螺2_固鎖": r2, "陀螺2_軸心": bit2,
+                                "陀螺3_上蓋": b3, "陀螺3_固鎖": r3, "陀螺3_軸心": bit3,
+                                "陀螺4_上蓋": b4, "陀螺4_固鎖": r4, "陀螺4_軸心": bit4,
+                                "陀螺5_上蓋": b5, "陀螺5_固鎖": r5, "陀螺5_軸心": bit5,
+                            }
+                            df_reg = pd.concat([df_reg, pd.DataFrame([new_player])], ignore_index=True)
+                            save_registrations(df_reg)
+                            st.success(f"🎉 選手【{name}】成功通過驗證，完成登記！")
+                            st.rerun()
         
         st.write("---")
         st.subheader(f"👥 已登記選手名單與配置總覽 (共 {len(df_reg)} / 7 人)")
@@ -500,17 +501,20 @@ elif main_mode == "雙人團體賽 (獨立區)":
         def validate_team_setup(team_name, p1_data, p2_data):
             if not p1_data["name"].strip() or not p2_data["name"].strip():
                 return False, f"❌ {team_name} 驗證失敗：兩位隊員的「選手名稱」皆不能留空！"
-            p1_ratchets = [r for r in [p1_data["r1"], p1_data["r2"]] if r.strip()]
-            p1_bits = [b for b in [p1_data["bit1"], p1_data["bit2"]] if b.strip()]
+            
+            # 清理與整理零件（排除空白）
+            p1_ratchets = [r.strip().lower() for r in [p1_data["r1"], p1_data["r2"]] if r.strip()]
+            p1_bits = [b.strip().lower() for b in [p1_data["bit1"], p1_data["bit2"]] if b.strip()]
             if len(p1_ratchets) != len(set(p1_ratchets)): return False, f"❌ {team_name} 驗證失敗：{p1_data['name']} 的固鎖零件重複！"
             if len(p1_bits) != len(set(p1_bits)): return False, f"❌ {team_name} 驗證失敗：{p1_data['name']} 的軸心零件重複！"
             
-            p2_ratchets = [r for r in [p2_data["r1"], p2_data["r2"]] if r.strip()]
-            p2_bits = [b for b in [p2_data["bit1"], p2_data["bit2"]] if b.strip()]
+            p2_ratchets = [r.strip().lower() for r in [p2_data["r1"], p2_data["r2"]] if r.strip()]
+            p2_bits = [b.strip().lower() for b in [p2_data["bit1"], p2_data["bit2"]] if b.strip()]
             if len(p2_ratchets) != len(set(p2_ratchets)): return False, f"❌ {team_name} 驗證失敗：{p2_data['name']} 的固鎖零件重複！"
             if len(p2_bits) != len(set(p2_bits)): return False, f"❌ {team_name} 驗證失敗：{p2_data['name']} 的軸心零件重複！"
 
-            all_blades = [str(p1_data["b1"]).lower(), str(p1_data["b2"]).lower(), str(p2_data["b1"]).lower(), str(p2_data["b2"]).lower()]
+            # 抓取整組 4 顆有效上蓋
+            all_blades = [b.strip().lower() for b in [p1_data["b1"], p1_data["b2"], p2_data["b1"], p2_data["b2"]] if b.strip()]
             restricted_count = sum(1 for b in all_blades if any(keyword in b for keyword in RESTRICTED_KEYWORDS))
             if restricted_count > 1:
                 return False, f"❌ {team_name} 禁卡表違規！偵測到 {restricted_count} 顆限制零件（神杖/鯊魚/天馬，整組限 1 顆）！"
