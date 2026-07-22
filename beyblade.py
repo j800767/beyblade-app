@@ -312,11 +312,16 @@ if main_mode == "個人賽 (7人單循環+4強)":
                 w_str = player_map.get(current_winner_id, "尚未決定") if current_winner_id != 0 else "尚未比賽"
                 st.write(f"**當前比賽結果**：`{w_str}`")
 
-    # 計算得分與戰績（精確計算勝場與敗場，未比賽場次不計敗）
+    # ==========================================
+    # 進階戰績與同分破局計算 (Tie-breaker Logic)
+    # 優先順序：1. 勝場數 ➡️ 2. 對戰勝負 (Head-to-Head) ➡️ 3. 戰績強度 (SoS / 擊敗對手總勝場)
+    # ==========================================
     def calculate_standings():
         wins_dict = {p_id: 0 for p_id in range(1, 8)}
         losses_dict = {p_id: 0 for p_id in range(1, 8)}
-        h2h = {}
+        defeated_opponents = {p_id: [] for p_id in range(1, 8)} # 紀錄贏過哪些人
+        h2h = {} # 紀錄對戰結果 (p1, p2) -> winner
+
         if df_matches is not None:
             for _, r in df_matches.iterrows():
                 w = int(r["勝者_編號"])
@@ -325,17 +330,32 @@ if main_mode == "個人賽 (7人單循環+4強)":
                     l = p2 if w == p1 else p1
                     wins_dict[w] += 1
                     losses_dict[l] += 1
+                    defeated_opponents[w].append(l)
                     h2h[(p1, p2)] = w
                     h2h[(p2, p1)] = w
         
-        # 排序邏輯：勝場數優先，同分比較對戰勝負 (Head-to-Head)
+        # 計算對戰強度 (SoS / 戰績強度)：贏過的對手的總勝場數 Sum of Defeated Opponents' Wins
+        sos_dict = {}
+        for p_id in range(1, 8):
+            sos_dict[p_id] = sum(wins_dict[opp] for opp in defeated_opponents[p_id])
+
+        # 排序邏輯 Key 產生器
         def sort_key(p_id):
             wins = wins_dict[p_id]
-            h2h_wins = sum(1 for (k, v) in h2h.items() if k[0] == p_id and v == p_id)
-            return (wins, h2h_wins)
+            sos = sos_dict[p_id]
+            
+            # 計算對戰總勝數 (Head-to-Head score against tied players)
+            # 在同勝場的人之中，對戰贏過幾場
+            h2h_score = 0
+            for other_id in range(1, 8):
+                if other_id != p_id and wins_dict[other_id] == wins:
+                    if h2h.get((p_id, other_id)) == p_id:
+                        h2h_score += 1
+
+            return (wins, h2h_score, sos)
 
         ranked_ids = sorted(range(1, 8), key=sort_key, reverse=True)
-        return wins_dict, losses_dict, ranked_ids
+        return wins_dict, losses_dict, sos_dict, h2h, ranked_ids, sort_key
 
     # --- Tab 3: 四強決賽 ---
     with tabs[2]:
@@ -345,7 +365,7 @@ if main_mode == "個人賽 (7人單循環+4強)":
         if completed_count < 21:
             st.warning(f"⏳ 預賽尚未結束（目前完成 {completed_count}/21 場），預賽打完後將自動開啟四強決賽！")
         else:
-            wins_dict, losses_dict, ranked_ids = calculate_standings()
+            wins_dict, losses_dict, sos_dict, h2h, ranked_ids, _ = calculate_standings()
             rank1_id, rank2_id, rank3_id, rank4_id = ranked_ids[:4]
             
             p1_str = f"第1名: {rank1_id}號 {player_map[rank1_id]}"
@@ -419,24 +439,48 @@ if main_mode == "個人賽 (7人單循環+4強)":
                     st.balloons()
                     st.markdown(f"### 🎖️ 三重盃 榮譽殿堂\n* 🥇 **冠軍**：{final_m['勝者']}\n* 🥈 **亞軍**：{final_m['敗者']}\n* 🥉 **季軍**：{place3['勝者']}")
 
-    # --- Tab 4: 排行榜 ---
+    # --- Tab 4: 排行榜 (含 Tie-breaker 判定) ---
     with tabs[3]:
-        st.header("📊 預賽即時戰績積分榜")
+        st.header("📊 預賽即時戰績積分榜（含 Tie-breaker 同分破局機制）")
+        st.caption("💡 排名優先順序：1. 總勝場 ➡️ 2. 對戰勝負 (Head-to-Head) ➡️ 3. 戰績強度 (擊敗對手的總勝場數)")
+        
         if df_reg.empty or (df_reg["編號"] == 0).all():
             st.info("尚無排名數據（需先完成盲抽編號與比賽）。")
         else:
-            wins_dict, losses_dict, ranked_ids = calculate_standings()
+            wins_dict, losses_dict, sos_dict, h2h, ranked_ids, sort_key = calculate_standings()
+            
+            # 檢查是否有完全同分、對戰與強度都一致，需要加賽的情況
+            tie_break_needed = set()
+            for i in range(len(ranked_ids) - 1):
+                id1, id2 = ranked_ids[i], ranked_ids[i+1]
+                if sort_key(id1) == sort_key(id2) and wins_dict[id1] > 0:
+                    tie_break_needed.add(id1)
+                    tie_break_needed.add(id2)
+
             table_data = []
             for rank, p_id in enumerate(ranked_ids, 1):
                 wins = wins_dict[p_id]
                 losses = losses_dict[p_id]
+                sos = sos_dict[p_id]
+                
+                # 狀態標示邏輯
+                if p_id in tie_break_needed and rank in [4, 5]:
+                    status_str = "⚔️ 需 1 分制加賽爭奪 4 強"
+                elif p_id in tie_break_needed:
+                    status_str = "⚠️ 同分/同強度待加賽"
+                elif rank <= 4:
+                    status_str = "🟢 晉級 4 強"
+                else:
+                    status_str = "🔴 預賽淘汰"
+
                 table_data.append({
                     "預賽排名": f"第 {rank} 名",
                     "編號": f"{p_id} 號",
                     "選手名稱": player_map.get(p_id, "未定"),
-                    "勝場數": f"{wins} 勝",
-                    "敗場數": f"{losses} 敗",
-                    "狀態": "🟢 晉級4強" if rank <= 4 else "🔴 預賽淘汰"
+                    "勝場": f"{wins} 勝",
+                    "敗場": f"{losses} 敗",
+                    "戰績強度 (對手勝場)": f"{sos} 分",
+                    "晉級狀態": status_str
                 })
             st.table(table_data)
 
