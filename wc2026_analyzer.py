@@ -6,14 +6,14 @@ import time
 # 1. 網頁基本配置
 # ==========================================
 st.set_page_config(
-    page_title="三重盃 雙人團體賽 8人隨機分組系統", 
+    page_title="三重盃 雙人團體賽 10人隨機分組系統", 
     page_icon="🎲", 
     layout="centered"
 )
 
 # 標題與簡介
-st.title("🎲 三重盃 雙人團體賽 - 8人盲抽分組系統")
-st.markdown("本系統專門用於將 **8 位獨立選手** 隨機打散，並兩兩隨機分配至 A、B、C、D 四個組別中。")
+st.title("🎲 三重盃 雙人團體賽 - 10人盲抽分組系統")
+st.markdown("本系統專門用於將 **10 位獨立選手** 隨機打散，並兩兩隨機分配至 A、B、C、D、E 五個組別中。")
 st.write("---")
 
 # ==========================================
@@ -25,22 +25,25 @@ if "team_draw_result" not in st.session_state:
 # ==========================================
 # 3. 選手名單輸入區
 # ==========================================
-st.subheader("📝 步驟 1：請輸入參賽的 8 位選手名稱")
+st.subheader("📝 步驟 1：請輸入參賽的 10 位選手名稱")
 
-# 用 4 欄雙列來排版，比較省空間又好看
-col1, col2, col3, col4 = st.columns(4)
+# 用 5 欄雙列排版，呈現 10 個輸入框
+col1, col2, col3, col4, col5 = st.columns(5)
 with col1:
     p1 = st.text_input("選手 1", value="選手A")
-    p5 = st.text_input("選手 5", value="選手E")
+    p6 = st.text_input("選手 6", value="選手F")
 with col2:
     p2 = st.text_input("選手 2", value="選手B")
-    p6 = st.text_input("選手 6", value="選手F")
+    p7 = st.text_input("選手 7", value="選手G")
 with col3:
     p3 = st.text_input("選手 3", value="選手C")
-    p7 = st.text_input("選手 7", value="選手G")
+    p8 = st.text_input("選手 8", value="選手H")
 with col4:
     p4 = st.text_input("選手 4", value="選手D")
-    p8 = st.text_input("選手 8", value="選手H")
+    p9 = st.text_input("選手 9", value="選手I")
+with col5:
+    p5 = st.text_input("選手 5", value="選手E")
+    p10 = st.text_input("選手 10", value="選手J")
 
 st.write("<br>", unsafe_allow_html=True)
 
@@ -49,15 +52,18 @@ st.write("<br>", unsafe_allow_html=True)
 # ==========================================
 st.subheader("🔥 步驟 2：執行隨機命運分組")
 
-# 收集所有輸入的選手
-players_list = [p1.strip(), p2.strip(), p3.strip(), p4.strip(), p5.strip(), p6.strip(), p7.strip(), p8.strip()]
+# 收集所有輸入的 10 位選手
+players_list = [
+    p1.strip(), p2.strip(), p3.strip(), p4.strip(), p5.strip(),
+    p6.strip(), p7.strip(), p8.strip(), p9.strip(), p10.strip()
+]
 
 # 防呆驗證：檢查留空與重複
 has_empty = any(not p for p in players_list)
 has_duplicate = len(players_list) != len(set(players_list))
 
 if has_empty:
-    st.error("❌ 錯誤：請確保 8 位選手的名稱都有輸入，不可留空！")
+    st.error("❌ 錯誤：請確保 10 位選手的名稱都有輸入，不可留空！")
 elif has_duplicate:
     st.error("❌ 錯誤：偵測到重複的選手名稱，請確認名字是否有輸入重複！")
 else:
@@ -71,15 +77,16 @@ else:
             random.shuffle(shuffled_players)
             time.sleep(2.0) # 2秒大螢幕動畫效果
         
-        # 將隨機洗牌後的 8 個人，每兩個人封裝成一組
+        # 將隨機洗牌後的 10 個人，每兩個人封裝成一組（共 5 組）
         st.session_state.team_draw_result = {
             "A組": [shuffled_players[0], shuffled_players[1]],
             "B組": [shuffled_players[2], shuffled_players[3]],
             "C組": [shuffled_players[4], shuffled_players[5]],
             "D組": [shuffled_players[6], shuffled_players[7]],
+            "E組": [shuffled_players[8], shuffled_players[9]],
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         }
-        st.toast("🎉 8位選手隨機分組完成！", icon="🎊")
+        st.toast("🎉 10位選手隨機分組完成！", icon="🎊")
 
 # ==========================================
 # 5. 分組結果大螢幕展現
@@ -91,7 +98,7 @@ if st.session_state.team_draw_result:
     st.subheader("📊 隨機抽籤組別結果")
     st.caption(f"⏱️ 抽籤完成時間：{res['timestamp']}")
     
-    # 用兩行兩列展現 A, B, C, D 四個組別的結果
+    # 使用 2 欄配置展示 A~E 組（左欄 A, C, E，右欄 B, D）
     r_col1, r_col2 = st.columns(2)
     
     with r_col1:
@@ -105,6 +112,12 @@ if st.session_state.team_draw_result:
             f"### 🛡️ 團體【 C 組 】\n\n"
             f"👤 **隊員 1**： {res['C組'][0]}\n\n"
             f"👤 **隊員 2**： {res['C組'][1]}"
+        )
+        st.write("<br>", unsafe_allow_html=True)
+        st.info(
+            f"### 🛡️ 團體【 E 組 】\n\n"
+            f"👤 **隊員 1**： {res['E組'][0]}\n\n"
+            f"👤 **隊員 2**： {res['E組'][1]}"
         )
         
     with r_col2:
@@ -130,4 +143,4 @@ if st.session_state.team_draw_result:
 # 6. 頁尾宣告
 # ==========================================
 st.write("---")
-st.caption("⚡ 三重盃 專用獨立 8人隨機分組工具 v2.0")
+st.caption("⚡ 三重盃 專用獨立 10人隨機分組工具 v2.0")
