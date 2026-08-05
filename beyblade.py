@@ -597,13 +597,23 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
         "📊 團體積分榜"
     ])
     
+    # 建立隊伍名稱與隊員的 Map
+    team_player_map = {}
+    for team in TEAM_NAMES:
+        p1_row = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 1")]
+        p2_row = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 2")]
+        p1 = p1_row["選手名稱"].values[0] if not p1_row.empty else ""
+        p2 = p2_row["選手名稱"].values[0] if not p2_row.empty else ""
+        team_player_map[team] = f"{team} ({p1} / {p2})" if (p1 or p2) else team
+
+    # --- Tab 1: 5組選手名單管理 ---
     with ttab1:
         st.header("📝 團體名單管理")
         ui_inputs = {}
         cols = st.columns(2)
         for idx, team in enumerate(TEAM_NAMES):
             with cols[idx % 2]:
-                st.subheader(f"🛡️ {team} 名單")
+                st.subheader(f"🛡️ {team}")
                 row_p1 = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 1")].iloc[0]
                 row_p2 = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 2")].iloc[0]
                 
@@ -612,7 +622,7 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
                 ui_inputs[team] = {"p1": p1, "p2": p2}
                 st.write("---")
 
-        if is_admin and st.button("💾 儲存團體名單並初始化預賽 10 場賽程", type="primary", use_container_width=True):
+        if is_admin and st.button("💾 儲存團體名單並初始化 10 場預賽賽程", type="primary", use_container_width=True):
             new_rows = []
             for team in TEAM_NAMES:
                 new_rows.append({"組別": team, "隊員別": "隊員 1", "選手名稱": ui_inputs[team]["p1"].strip()})
@@ -620,30 +630,151 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
             df_teams = pd.DataFrame(new_rows)
             save_team_data(df_teams)
             
-            if df_team_matches is None:
-                t_matches = []
-                for idx, (t1, t2) in enumerate(TEAM_SCHEDULE_10, 1):
-                    t_matches.append({"場次": idx, "隊伍A": t1, "隊伍B": t2, "勝隊": "尚未決定"})
-                save_team_matches(pd.DataFrame(t_matches))
-            st.success("團體名單與 10 場預賽賽程儲存完成！")
+            # 初始化正統 10 場單循環賽程
+            t_matches = []
+            for idx, (t1, t2) in enumerate(TEAM_SCHEDULE_10, 1):
+                t_matches.append({"場次": idx, "隊伍A": t1, "隊伍B": t2, "勝隊": "尚未決定"})
+            save_team_matches(pd.DataFrame(t_matches))
+            save_team_finals(None)
+            st.success("團體名單與 10 場單循環預賽賽程已重置初始化！")
             st.rerun()
 
         st.dataframe(df_teams, use_container_width=True)
 
+    # --- Tab 2: 單循環控制台 ---
     with ttab2:
-        st.header("⚔️ 團體預賽控制台")
-        if df_team_matches is not None:
-            st.dataframe(df_team_matches, use_container_width=True)
-            
+        st.header("⚔️ 團體預賽：5 隊單循環控制台 (共 10 場)")
+        if df_team_matches is None:
+            st.warning("⏳ 請先在「5組選手名單管理」點擊【儲存團體名單並初始化預賽賽程】！")
+        else:
+            completed_t_count = sum(1 for w in df_team_matches["勝隊"] if w != "尚未決定")
+            st.info(f"### 📍 預賽總進度：{completed_t_count} / 10 場")
+
+            for m_idx, row in df_team_matches.iterrows():
+                t1, t2, winner = row["隊伍A"], row["隊伍B"], row["勝隊"]
+                t1_label = team_player_map.get(t1, t1)
+                t2_label = team_player_map.get(t2, t2)
+
+                st.write(f"#### 🥊 場次 {row['場次']}：**🔴 {t1_label}** 🆚 **🔵 {t2_label}**")
+                
+                if is_admin:
+                    c1, c2, c3 = st.columns([2, 2, 3])
+                    with c1:
+                        if st.button(f"🏆 {t1} 獲勝", key=f"tm_{m_idx}_t1", use_container_width=True, type="primary" if winner == t1 else "secondary"):
+                            df_team_matches.at[m_idx, "勝隊"] = t1
+                            save_team_matches(df_team_matches)
+                            st.rerun()
+                    with c2:
+                        if st.button(f"🏆 {t2} 獲勝", key=f"tm_{m_idx}_t2", use_container_width=True, type="primary" if winner == t2 else "secondary"):
+                            df_team_matches.at[m_idx, "勝隊"] = t2
+                            save_team_matches(df_team_matches)
+                            st.rerun()
+                    with c3:
+                        st.caption(f"當前結果：`{team_player_map.get(winner, winner)}`")
+                else:
+                    st.write(f"結果：`{team_player_map.get(winner, '比賽中')}`")
+                st.write("---")
+
+    # --- Tab 3: 預賽賽程總覽 ---
     with ttab3:
-        st.header("🗓️ 團體賽 10 場對戰總覽")
+        st.header("🗓️ 團體預賽 10 場賽程總覽")
         if df_team_matches is not None:
-            st.table(df_team_matches)
+            disp_tm = []
+            for _, row in df_team_matches.iterrows():
+                disp_tm.append({
+                    "場次": f"第 {row['場次']} 場",
+                    "隊伍 A": team_player_map.get(row['隊伍A'], row['隊伍A']),
+                    "隊伍 B": team_player_map.get(row['隊伍B'], row['隊伍B']),
+                    "勝隊": team_player_map.get(row['勝隊'], "⏳ 待定") if row['勝隊'] != "尚未決定" else "⏳ 待定"
+                })
+            st.dataframe(pd.DataFrame(disp_tm), use_container_width=True, hide_index=True)
 
+    # 團體戰績計算邏輯
+    def calculate_team_standings():
+        t_wins = {t: 0 for t in TEAM_NAMES}
+        t_losses = {t: 0 for t in TEAM_NAMES}
+        if df_team_matches is not None:
+            for _, row in df_team_matches.iterrows():
+                w = row["勝隊"]
+                t1, t2 = row["隊伍A"], row["隊伍B"]
+                if w in TEAM_NAMES:
+                    t_wins[w] += 1
+                    l = t2 if w == t1 else t1
+                    t_losses[l] += 1
+        
+        ranked_teams = sorted(TEAM_NAMES, key=lambda x: t_wins[x], reverse=True)
+        return t_wins, t_losses, ranked_teams
+
+    # --- Tab 4: 冠亞軍總決賽 ---
     with ttab4:
-        st.header("🏆 團體冠亞軍總決賽")
-        st.info("預賽 10 場完成後開放。")
+        st.header("🏆 雙人團體冠亞軍總決賽")
+        completed_t_count = sum(1 for w in df_team_matches["勝隊"] if w != "尚未決定") if df_team_matches is not None else 0
+        
+        if df_team_matches is None or completed_t_count < 10:
+            st.warning(f"⏳ 團體預賽尚未完成（已完成 {completed_t_count}/10 場）")
+        else:
+            t_wins, t_losses, ranked_teams = calculate_team_standings()
+            t1_top, t2_top = ranked_teams[0], ranked_teams[1]
+            
+            t1_str = team_player_map.get(t1_top, t1_top)
+            t2_str = team_player_map.get(t2_top, t2_top)
+            
+            st.success(f"🔥 預賽前 2 名晉級總決賽：**第 1 名【{t1_str}】** 🆚 **第 2 名【{t2_str}】**")
+            
+            if df_team_finals is None:
+                finals_tf = pd.DataFrame([{"階段": "冠亞軍決賽", "隊伍1": t1_top, "隊伍2": t2_top, "勝隊": "尚未決定", "敗隊": "尚未決定"}])
+                save_team_finals(finals_tf)
+                df_team_finals = finals_tf
 
+            curr_tf_w = df_team_finals.loc[0, "勝隊"]
+            
+            st.write("---")
+            st.subheader("👑 冠亞軍爭霸賽")
+            st.write(f"🔴 **{t1_str}**  VS  🔵 **{t2_str}**")
+            
+            if is_admin:
+                tf_opts = ["請選擇冠軍隊伍...", t1_top, t2_top]
+                curr_idx = tf_opts.index(curr_tf_w) if curr_tf_w in tf_opts else 0
+                sel_tf = st.selectbox(
+                    "選擇雙人團體賽冠軍隊伍：", 
+                    tf_opts, 
+                    index=curr_idx,
+                    format_func=lambda x: team_player_map.get(x, x)
+                )
+                if sel_tf != "請選擇冠軍隊伍..." and sel_tf != curr_tf_w:
+                    loser_tf = t2_top if sel_tf == t1_top else t1_top
+                    df_team_finals.loc[0, "勝隊"] = sel_tf
+                    df_team_finals.loc[0, "敗隊"] = loser_tf
+                    save_team_finals(df_team_finals)
+                    st.rerun()
+            else:
+                st.write(f"勝隊：`{team_player_map.get(curr_tf_w, '比賽中')}`")
+
+            if curr_tf_w in TEAM_NAMES:
+                st.write("---")
+                st.balloons()
+                champion_team = team_player_map.get(curr_tf_w, curr_tf_w)
+                runner_team_id = df_team_finals.loc[0, "敗隊"]
+                runner_team = team_player_map.get(runner_team_id, runner_team_id)
+                
+                st.subheader("🎉 雙人團體賽最終名次")
+                st.success(f"""
+                * 🥇 **團體冠軍**：{champion_team}
+                * 🥈 **團體亞軍**：{runner_team}
+                """)
+
+    # --- Tab 5: 團體積分榜 ---
     with ttab5:
-        st.header("📊 團體積分榜")
-        st.info("戰績統計將於預賽開始後顯示。")
+        st.header("📊 團體預賽即時積分榜")
+        if df_team_matches is not None:
+            t_wins, t_losses, ranked_teams = calculate_team_standings()
+            t_table = []
+            for rank, team in enumerate(ranked_teams, 1):
+                t_table.append({
+                    "排名": f"第 {rank} 名",
+                    "組別": team,
+                    "隊員": team_player_map.get(team, team),
+                    "勝場": t_wins[team],
+                    "敗場": t_losses[team]
+                })
+            st.table(t_table)
