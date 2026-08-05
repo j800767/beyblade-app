@@ -17,7 +17,10 @@ PLAYER_DICT = {
 # --- 資料讀取與儲存函式 ---
 def load_swiss_matches():
     if os.path.exists(SWISS_FILE):
-        return pd.read_csv(SWISS_FILE)
+        try:
+            return pd.read_csv(SWISS_FILE)
+        except Exception:
+            return None
     return None
 
 def save_swiss_matches(df):
@@ -25,7 +28,10 @@ def save_swiss_matches(df):
 
 def load_finals_matches():
     if os.path.exists(FINALS_FILE):
-        return pd.read_csv(FINALS_FILE)
+        try:
+            return pd.read_csv(FINALS_FILE)
+        except Exception:
+            return None
     return None
 
 def save_finals_matches(df):
@@ -42,7 +48,7 @@ def calculate_swiss_standings():
     h2h = {pid: {} for pid in PLAYER_DICT.keys()}
     
     # 1. 統計總勝敗數與對戰紀錄
-    if df_swiss is not None:
+    if df_swiss is not None and not df_swiss.empty:
         for _, row in df_swiss.iterrows():
             w = row["勝者_編號"]
             l = row["敗者_編號"]
@@ -54,7 +60,7 @@ def calculate_swiss_standings():
 
     # 2. 計算 SOS（對手強度分）：僅採計前 4 輪，避免第 5 輪加賽影響 SOS
     sos = {pid: 0 for pid in PLAYER_DICT.keys()}
-    if df_swiss is not None:
+    if df_swiss is not None and not df_swiss.empty:
         for pid in PLAYER_DICT.keys():
             r1_to_4 = df_swiss[(df_swiss["輪次"] <= 4) & ((df_swiss["選手1_編號"] == pid) | (df_swiss["選手2_編號"] == pid))]
             opponents = []
@@ -64,7 +70,7 @@ def calculate_swiss_standings():
                     opponents.append(opp)
             sos[pid] = sum(wins[opp] for opp in set(opponents))
 
-    # 3. 排序邏輯：1. 勝場數 -> 2. H2H -> 3. SOS
+    # 3. 排序邏輯：1. 勝場數 -> 2. SOS
     def sort_key(pid):
         return (wins[pid], sos[pid])
 
@@ -73,7 +79,6 @@ def calculate_swiss_standings():
     # 4. 判斷同分待加賽與晉級狀態
     status = {}
     for i, pid in enumerate(ranked_ids):
-        # 檢查是否與相鄰選手完全同分 (勝場數與 SOS 皆相同)
         has_tie = False
         if i > 0:
             prev_id = ranked_ids[i-1]
@@ -118,7 +123,7 @@ def generate_next_round_pairs(round_num):
 
     # 👉 第 1~4 輪：標準瑞士輪配對 (避免重複對戰)
     history_pairs = set()
-    if df_swiss is not None:
+    if df_swiss is not None and not df_swiss.empty:
         for _, row in df_swiss.iterrows():
             history_pairs.add(tuple(sorted([row["選手1_編號"], row["選手2_編號"]])))
 
@@ -135,7 +140,7 @@ def generate_next_round_pairs(round_num):
                 break
         
         if found_opp is None:
-            found_opp = unpaired[0] # 若無法避免重複，強制配對最高分者
+            found_opp = unpaired[0]
 
         unpaired.remove(found_opp)
         next_matches.append({
@@ -164,8 +169,7 @@ tabs = st.tabs(["📝 選手報名與抽籤", "⚔️ 預賽：瑞士輪控制�
 with tabs[0]:
     st.header("📝 選手抽籤與初始化")
     if is_admin:
-        if st.button("🎲 初始化/重置 4 輪瑞士輪賽程", type="secondary"):
-            # 生成第 1 輪預設對戰
+        if st.button("🎲 初始化/重置 4 輪瑞士輪賽程", type="primary"):
             r1 = [
                 {"輪次": 1, "桌號": 1, "選手1_編號": 1, "選手1名稱": "Q", "選手2_編號": 2, "選手2名稱": "S", "勝者_編號": 0, "敗者_編號": 0},
                 {"輪次": 1, "桌號": 2, "選手1_編號": 3, "選手1名稱": "C", "選手2_編號": 4, "選手2名稱": "E", "勝者_編號": 0, "敗者_編號": 0},
@@ -177,14 +181,14 @@ with tabs[0]:
             save_swiss_matches(df_swiss)
             if os.path.exists(FINALS_FILE):
                 os.remove(FINALS_FILE)
-            st.success("✅ 賽程已重置為第 1 輪！")
+            st.success("✅ 賽程已成功初始化為第 1 輪！請切換至「預賽：瑞士輪控制台」登記比賽結果。")
             st.rerun()
 
 # --- Tab 2: 瑞士輪控制台 ---
 with tabs[1]:
     st.header("⚔️ 預賽賽果登記控制台")
-    if df_swiss is None:
-        st.warning("請先至第一個分頁初始化賽程！")
+    if df_swiss is None or df_swiss.empty:
+        st.info("💡 目前無賽程資料，請至第一個分頁「📝 選手報名與抽籤」點擊初始化按鈕。")
     else:
         max_r = int(df_swiss["輪次"].max())
         selected_r = st.selectbox("請選擇要登記的輪次：", range(1, max_r + 1), index=max_r - 1)
@@ -221,7 +225,6 @@ with tabs[1]:
                     st.info("尚未比賽")
             st.write("---")
 
-        # 產生下一輪 / 加賽按鈕
         current_r_finished = (r_matches["勝者_編號"] != 0).all()
         if is_admin and current_r_finished and selected_r == max_r:
             _, _, _, _, status, _ = calculate_swiss_standings()
@@ -244,24 +247,46 @@ with tabs[1]:
 # --- Tab 3: 對戰總表 ---
 with tabs[2]:
     st.header("📅 預賽完整賽程表")
-    if df_swiss is not None:
+    if df_swiss is not None and not df_swiss.empty:
         st.dataframe(df_swiss, use_container_width=True)
+    else:
+        st.info("💡 尚未建立預賽資料。")
 
 # --- Tab 4: 四強決賽 ---
 with tabs[3]:
     st.header("🏆 決賽：四強單淘汰控制台")
-    wins, losses, sos, h2h, status, ranked_ids = calculate_swiss_standings()
-    
-    # 抓取前 4 名晉級者
-    top4 = ranked_ids[:4]
-    st.subheader("🎉 預賽晉級 4 強選手：")
-    for r, pid in enumerate(top4, 1):
-        st.write(f"第 {r} 名：**{pid}號 {PLAYER_DICT[pid]}** ({wins[pid]}勝 {losses[pid]}敗)")
+    if df_swiss is None or df_swiss.empty:
+        st.info("💡 請先初始化預賽並完成 4 輪賽事。")
+    else:
+        wins, losses, sos, h2h, status, ranked_ids = calculate_swiss_standings()
+        top4 = ranked_ids[:4]
+        
+        st.subheader("🎉 預賽晉級 4 強選手：")
+        for r, pid in enumerate(top4, 1):
+            st.write(f"第 {r} 名：**{pid}號 {PLAYER_DICT[pid]}** ({wins[pid]}勝 {losses[pid]}敗)")
+        
+        st.write("---")
+        
+        if df_finals is None or df_finals.empty:
+            if is_admin:
+                if st.button("🔥 生成 4 強決賽賽程對戰表", type="primary", use_container_width=True):
+                    finals_data = [
+                        {"階段": "準決賽A", "選手1": PLAYER_DICT[top4[0]], "選手2": PLAYER_DICT[top4[3]], "勝者": "尚未決定"},
+                        {"階段": "準決賽B", "選手1": PLAYER_DICT[top4[1]], "選手2": PLAYER_DICT[top4[2]], "勝者": "尚未決定"},
+                        {"階段": "季軍賽", "選手1": "準決賽A敗者", "選手2": "準決賽B敗者", "勝者": "尚未決定"},
+                        {"階段": "冠軍賽", "選手1": "準決賽A勝者", "選手2": "準決賽B勝者", "勝者": "尚未決定"}
+                    ]
+                    df_finals = pd.DataFrame(finals_data)
+                    save_finals_matches(df_finals)
+                    st.rerun()
+        else:
+            st.subheader("⚔️ 四強決賽對戰表")
+            st.dataframe(df_finals, use_container_width=True)
 
 # --- Tab 5: 即時積分榜 ---
 with tabs[4]:
     st.header("📊 預賽即時戰績積分榜")
-    st.caption("💡 破平順序 (Tie-breakers) : 1. 總勝場數 (Wins) ➡️ 2. 直接對戰勝負 (H2H) ➡️ 3. 對手強度分 (SOS)")
+    st.caption("💡 破平順序 (Tie-breakers) : 1. 總勝場數 (Wins) ➡️ 2. 對手強度分 (SOS)")
     
     wins, losses, sos, h2h, status, ranked_ids = calculate_swiss_standings()
     
