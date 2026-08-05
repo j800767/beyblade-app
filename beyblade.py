@@ -142,7 +142,6 @@ def calculate_swiss_standings():
             1 for other in range(1, 11)
             if other != p_id and wins[other] == w_cnt and h2h.get((p_id, other)) == p_id
         )
-        # 排序優先順序：勝場數 ➡️ 直接對戰成績 (H2H) ➡️ SOS 強度
         return (w_cnt, h2h_score, s_score)
 
     ranked_ids = sorted(range(1, 11), key=sort_key, reverse=True)
@@ -400,17 +399,20 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
         else:
             wins, losses, sos, h2h, _, ranked_ids, sort_key = calculate_swiss_standings()
             
-            # 檢查第 4 名平手
+            # 檢查第 4 名與第 5 名是否同勝場且對戰互咬/未對戰
             rank4_id = ranked_ids[3]
-            tied_candidates = [p for p in ranked_ids if sort_key(p) == sort_key(rank4_id)]
+            rank5_id = ranked_ids[4]
+            is_wins_tied = (wins[rank4_id] == wins[rank5_id])
+            h2h_tied = (h2h.get((rank4_id, rank5_id)) is None or sort_key(rank4_id)[1] == sort_key(rank5_id)[1])
             
-            if len(tied_candidates) > 1 and "selected_4th" not in st.session_state:
-                st.error(f"⚠️ 偵測到第 4 名存在平手爭議！同分選手：{', '.join([f'{p}號 {player_map[p]}' for p in tied_candidates])}")
-                st.info("請現場進行加賽或抽籤，並由管理員指定最終晉級第 4 名的選手：")
+            if is_wins_tied and h2h_tied and "selected_4th" not in st.session_state:
+                tied_candidates = [p for p in ranked_ids if wins[p] == wins[rank4_id]]
+                st.error(f"⚠️ 偵測到第 4 名晉級點存在同分/對戰互咬爭議！同勝場選手：{', '.join([f'{p}號 {player_map[p]}' for p in tied_candidates])}")
+                st.info("請現場進行【一分定勝負 PK 加賽】，並由管理員指定最終晉級四強的第 4 名選手：")
                 
                 if is_admin:
                     chosen_4th = st.selectbox(
-                        "選擇晉級四強的第 4 名選手：", 
+                        "選擇一分加賽獲勝並晉級四強的第 4 名選手：", 
                         tied_candidates, 
                         format_func=lambda x: f"{x}號 {player_map[x]}"
                     )
@@ -418,7 +420,7 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                         st.session_state["selected_4th"] = chosen_4th
                         st.rerun()
                 else:
-                    st.warning("等待管理員裁決平手同分者...")
+                    st.warning("等待管理員裁決平手加賽結果...")
             
             else:
                 final_4 = ranked_ids[:3]
@@ -690,8 +692,7 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
                 })
             st.dataframe(pd.DataFrame(disp_tm), use_container_width=True, hide_index=True)
 
-    # 團體戰績計算邏輯
-# 團體戰績與破平計算邏輯
+    # 團體戰績與破平計算邏輯
     def calculate_team_standings():
         t_wins = {t: 0 for t in TEAM_NAMES}
         t_losses = {t: 0 for t in TEAM_NAMES}
@@ -729,18 +730,18 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
         else:
             t_wins, t_losses, ranked_teams, team_sort_key = calculate_team_standings()
             
-            # 檢查第 2 名是否存在平手/互咬爭議
+            # 檢查第 2 名與第 3 名勝場是否相同
             rank2_team = ranked_teams[1]
-            tied_teams = [t for t in ranked_teams if team_sort_key(t) == team_sort_key(rank2_team)]
+            rank3_team = ranked_teams[2]
             
-            # 如果第 2 名有平手隊伍，且尚未手動指定晉級者
-            if len(tied_teams) > 1 and "selected_team_2nd" not in st.session_state:
-                st.error(f"⚠️ 偵測到第 2 名存在爭議（三方互咬/同分平手）！同分隊伍：{', '.join([team_player_map.get(t, t) for t in tied_teams])}")
-                st.info("請現場進行加賽或抽籤，並由管理員指定最終晉級總決賽的第 2 名隊伍：")
+            if t_wins[rank2_team] == t_wins[rank3_team] and "selected_team_2nd" not in st.session_state:
+                tied_teams = [t for t in ranked_teams if t_wins[t] == t_wins[rank2_team]]
+                st.error(f"⚠️ 偵測到第 2 名晉級點存在戰績相同/互咬爭議！同勝場隊伍：{', '.join([team_player_map.get(t, t) for t in tied_teams])}")
+                st.info("請現場派出代表進行【一分定勝負 PK 加賽】，並由管理員指定最終晉級總決賽的第 2 名隊伍：")
                 
                 if is_admin:
                     chosen_2nd = st.selectbox(
-                        "選擇晉級總決賽的第 2 名隊伍：", 
+                        "選擇一分加賽獲勝並晉級總決賽的第 2 名隊伍：", 
                         tied_teams, 
                         format_func=lambda x: team_player_map.get(x, x)
                     )
@@ -801,7 +802,7 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
                     * 🥈 **團體亞軍**：{runner_team}
                     """)
 
-  # --- Tab 5: 團體積分榜 ---
+    # --- Tab 5: 團體積分榜 ---
     with ttab5:
         st.header("📊 團體預賽即時積分榜")
         if df_team_matches is not None:
