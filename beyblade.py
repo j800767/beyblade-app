@@ -800,11 +800,11 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
                     * 🥈 **團體亞軍**：{runner_team}
                     """)
 
-    # --- Tab 5: 團體積分榜 ---
+  # --- Tab 5: 團體積分榜 ---
     with ttab5:
         st.header("📊 團體預賽即時積分榜")
         if df_team_matches is not None:
-            t_wins, t_losses, ranked_teams = calculate_team_standings()
+            t_wins, t_losses, ranked_teams, _ = calculate_team_standings()
             t_table = []
             for rank, team in enumerate(ranked_teams, 1):
                 t_table.append({
