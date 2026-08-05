@@ -209,7 +209,7 @@ if st.session_state["is_admin"]:
     if admin_input == ADMIN_PASSWORD:
         st.sidebar.success("🔓 管理員已授權")
     else:
-        st.sidebar.info("💡 預設密碼為: )
+        st.sidebar.info("" )
 
 is_admin = st.session_state["is_admin"]
 
