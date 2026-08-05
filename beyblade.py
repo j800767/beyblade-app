@@ -359,16 +359,21 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                     st.write(f"比賽結果：`{player_map.get(w_id, '進行中')}`")
                 st.write("---")
 
-            # 產生下一輪按鈕
+        
+           # 產生下一輪 / 加賽按鈕 (取消原本 max_round < 4 的限制)
             if is_admin and completed_r_count == 5:
                 if current_max_round < 4:
-                    if st.button(f"🚀 生成第 {current_max_round + 1} 輪瑞士輪對戰賽程", type="primary", use_container_width=True):
-                        next_matches = generate_next_round_pairs(current_max_round + 1)
-                        df_next = pd.DataFrame(next_matches)
-                        df_swiss = pd.concat([df_swiss, df_next], ignore_index=True)
-                        save_swiss_matches(df_swiss)
-                        st.success(f"🎉 第 {current_max_round + 1} 輪賽程配對完成！")
-                        st.rerun()
+                    btn_text = f"🚀 生成第 {current_max_round + 1} 輪瑞士輪對戰賽程"
+                else:
+                    btn_text = f"⚔️ 生成第 {current_max_round + 1} 輪同分加賽對戰賽程"
+
+                if st.button(btn_text, type="primary", use_container_width=True):
+                    next_matches = generate_next_round_pairs(current_max_round + 1)
+                    df_next = pd.DataFrame(next_matches)
+                    df_swiss = pd.concat([df_swiss, df_next], ignore_index=True)
+                    save_swiss_matches(df_swiss)
+                    st.success(f"🎉 第 {current_max_round + 1} 輪賽程配對完成！")
+                    st.rerun()
                 else:
                     st.success("🎉 預賽 4 輪瑞士輪已完全結束！請前往【🏆 決賽：四強單淘汰】分頁開啟決賽！")
 
