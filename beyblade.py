@@ -20,7 +20,6 @@ ADMIN_PASSWORD = "admin"  # 管理員預設密碼
 
 TEAM_NAMES = ["A組", "B組", "C組", "D組", "E組"]
 
-# 5隊單循環 10 場固定賽程表
 TEAM_RR_SCHEDULE = [
     ("A組", "B組"), ("C組", "D組"),
     ("A組", "C組"), ("B組", "E組"),
@@ -45,7 +44,10 @@ def save_registrations(df):
 
 def load_matches():
     if os.path.exists(MATCH_FILE):
-        return pd.read_csv(MATCH_FILE).fillna("")
+        df = pd.read_csv(MATCH_FILE).fillna("")
+        if "組別" not in df.columns:
+            df["組別"] = "0-0"
+        return df
     return None
 
 def save_matches(df):
@@ -191,11 +193,11 @@ if main_mode == "個人賽 (10人瑞士輪+4強)":
         return wins_dict, losses_dict, sos_dict, played_pairs, ranked_ids, sort_key
 
     def generate_swiss_round_pairings(target_round):
-        wins_dict, _, _, played_pairs, ranked_ids, _ = calculate_swiss_standings()
+        wins_dict, losses_dict, _, played_pairs, ranked_ids, _ = calculate_swiss_standings()
         if target_round == 1:
             shuffled = list(range(1, 11))
             random.shuffle(shuffled)
-            return [(shuffled[i], shuffled[i+1]) for i in range(0, 10, 2)]
+            return [(shuffled[i], shuffled[i+1], "0-0") for i in range(0, 10, 2)]
 
         unpaired = ranked_ids.copy()
         pairings = []
@@ -210,7 +212,10 @@ if main_mode == "個人賽 (10人瑞士輪+4強)":
             if best_p2 is None:
                 best_p2 = unpaired[0]
             unpaired.remove(best_p2)
-            pairings.append((p1, best_p2))
+            
+            # 決定對戰組別名稱 (例如 1-0 組)
+            group_label = f"{wins_dict[p1]}-{losses_dict[p1]}"
+            pairings.append((p1, best_p2, group_label))
         return pairings
 
     with tabs[0]:
@@ -249,7 +254,7 @@ if main_mode == "個人賽 (10人瑞士輪+4強)":
                     save_registrations(df_reg)
                     
                     r1_pairs = generate_swiss_round_pairings(1)
-                    r1_matches = [{"輪次": 1, "場次": idx, "選手A_編號": p1, "選手B_編號": p2, "勝者_編號": 0} for idx, (p1, p2) in enumerate(r1_pairs, 1)]
+                    r1_matches = [{"輪次": 1, "場次": idx, "組別": grp, "選手A_編號": p1, "選手B_編號": p2, "勝者_編號": 0} for idx, (p1, p2, grp) in enumerate(r1_pairs, 1)]
                     save_matches(pd.DataFrame(r1_matches))
                     st.success("🎉 抽籤完成！瑞士輪 第 1 輪賽程已自動生成！"); st.rerun()
 
@@ -275,6 +280,7 @@ if main_mode == "個人賽 (10人瑞士輪+4強)":
         if df_matches is None or df_matches.empty or (df_reg["編號"] == 0).all():
             st.warning("⏳ 需先在「選手報名」分頁集滿 10 人並進行【盲抽編號】！")
         else:
+            wins_dict, losses_dict, _, _, _, _ = calculate_swiss_standings()
             current_r = int(df_matches["輪次"].max())
             completed_in_r = df_matches[df_matches["輪次"] == current_r]["勝者_編號"].apply(lambda w: 1 if w != 0 else 0).sum()
             total_completed = df_matches["勝者_編號"].apply(lambda w: 1 if w != 0 else 0).sum()
@@ -282,16 +288,18 @@ if main_mode == "個人賽 (10人瑞士輪+4強)":
             st.progress(total_completed / 20, text=f"瑞士輪總進度：{total_completed} / 20 場 (當前第 {current_r} 輪，完成 {completed_in_r}/5 場)")
             r_matches = df_matches[df_matches["輪次"] == current_r]
             
-            col_sel, _ = st.columns([1, 2])
-            with col_sel:
-                selected_match_idx = st.selectbox(f"選擇 第 {current_r} 輪場次", r_matches["場次"].tolist())
+            # 場次選單加上【組別標示】
+            match_options = {f"Match {row['場次']} (組別: {row['組別']})": row['場次'] for _, row in r_matches.iterrows()}
+            selected_label = st.selectbox(f"選擇 第 {current_r} 輪場次", list(match_options.keys()))
+            selected_match_idx = match_options[selected_label]
             
             match_row = r_matches[r_matches["場次"] == selected_match_idx].iloc[0]
             p1_id, p2_id = int(match_row["選手A_編號"]), int(match_row["選手B_編號"])
             p1_name, p2_name = player_map.get(p1_id, f"{p1_id}號"), player_map.get(p2_id, f"{p2_id}號")
             current_winner_id = int(match_row["勝者_編號"])
+            group_tag = match_row["組別"]
 
-            st.info(f"### 🥊 第 {current_r} 輪 - Match {selected_match_idx}\n\n## **🔴 {p1_id}號 {p1_name}**  🆚  **🔵 {p2_id}號 {p2_name}**")
+            st.info(f"### 🥊 第 {current_r} 輪 - Match {selected_match_idx} 【組別: {group_tag}】\n\n## **🔴 {p1_id}號 {p1_name} ({wins_dict[p1_id]}勝-{losses_dict[p1_id]}敗)**  🆚  **🔵 {p2_id}號 {p2_name} ({wins_dict[p2_id]}勝-{losses_dict[p2_id]}敗)**")
 
             if is_admin:
                 st.write("**登記勝者：**")
@@ -310,7 +318,7 @@ if main_mode == "個人賽 (10人瑞士輪+4強)":
                 if current_r < 4:
                     if st.button(f"🚀 第 {current_r} 輪全數完成！點此自動配對生成 第 {current_r + 1} 輪賽程", type="primary", use_container_width=True):
                         next_pairs = generate_swiss_round_pairings(current_r + 1)
-                        next_rows = [{"輪次": current_r + 1, "場次": idx, "選手A_編號": p1, "選手B_編號": p2, "勝者_編號": 0} for idx, (p1, p2) in enumerate(next_pairs, 1)]
+                        next_rows = [{"輪次": current_r + 1, "場次": idx, "組別": grp, "選手A_編號": p1, "選手B_編號": p2, "勝者_編號": 0} for idx, (p1, p2, grp) in enumerate(next_pairs, 1)]
                         df_matches = pd.concat([df_matches, pd.DataFrame(next_rows)], ignore_index=True)
                         save_matches(df_matches); st.rerun()
                 else:
@@ -330,7 +338,7 @@ if main_mode == "個人賽 (10人瑞士輪+4強)":
                     p1_str = f"{p1}號 {player_map.get(p1, '')}"
                     p2_str = f"{p2}號 {player_map.get(p2, '')}"
                     w_str = f"🏆 {player_map.get(w, f'{w}號')}" if w != 0 else "⏳ 未比賽"
-                    r_list.append({"場次": f"Match {row['場次']}", "選手 A": p1_str, "選手 B": p2_str, "獲勝者": w_str})
+                    r_list.append({"組別": f"【{row.get('組別', '0-0')}】", "場次": f"Match {row['場次']}", "選手 A": p1_str, "選手 B": p2_str, "獲勝者": w_str})
                 st.dataframe(pd.DataFrame(r_list), use_container_width=True, hide_index=True)
 
     with tabs[3]:
@@ -422,6 +430,7 @@ if main_mode == "個人賽 (10人瑞士輪+4強)":
                     "預賽排名": f"第 {rank} 名",
                     "編號": f"{p_id} 號",
                     "選手名稱": player_map.get(p_id, "未定"),
+                    "戰績組別": f"【{wins_dict[p_id]}-{losses_dict[p_id]}】",
                     "勝場": f"{wins_dict[p_id]} 勝",
                     "敗場": f"{losses_dict[p_id]} 敗",
                     "對手強度(SOS)": f"{sos_dict[p_id]} 分",
@@ -484,7 +493,6 @@ elif main_mode == "雙人團體賽 (5組循環+冠亞賽)":
         members_clean = [m for m in members if str(m).strip()]
         return f"({ ' ＆ '.join(members_clean) })" if members_clean else "(未登記)"
 
-    # 計算預賽基礎勝負、對戰關係與同分加賽判定
     def get_team_standings():
         team_stats = {t: {"wins": 0, "losses": 0} for t in TEAM_NAMES}
         h2h_matrix = {t1: {t2: None for t2 in TEAM_NAMES} for t1 in TEAM_NAMES}
@@ -500,10 +508,8 @@ elif main_mode == "雙人團體賽 (5組循環+冠亞賽)":
                     h2h_matrix[tA][tB] = w
                     h2h_matrix[tB][tA] = w
 
-        # 基礎排序 (勝場高者在前)
         sorted_teams = sorted(TEAM_NAMES, key=lambda t: (team_stats[t]["wins"], -team_stats[t]["losses"]), reverse=True)
         
-        # 檢查平手與戰績互咬狀況 (特別關心第2名與第3名之間是否有同勝負)
         tied_groups = {}
         for t in TEAM_NAMES:
             w_cnt = team_stats[t]["wins"]
@@ -516,33 +522,27 @@ elif main_mode == "雙人團體賽 (5組循環+冠亞賽)":
         if completed_cnt == 10:
             rank2_team = sorted_teams[1]
             rank3_team = sorted_teams[2]
-            # 如果第 2 名與第 3 名勝場相同，代表預賽同戰績衝撞
             if team_stats[rank2_team]["wins"] == team_stats[rank3_team]["wins"]:
                 same_win_cnt = team_stats[rank2_team]["wins"]
                 tied_teams_for_spot = tied_groups[same_win_cnt]
                 
-                # 檢查這幾隊之間的 H2H 狀況
                 if len(tied_teams_for_spot) == 2:
                     t1, t2 = tied_teams_for_spot[0], tied_teams_for_spot[1]
-                    # 兩隊同分：直得看兩隊對戰勝者
                     h2h_winner = h2h_matrix[t1][t2]
                     if h2h_winner:
-                        # 將 H2H 勝者排在前面
                         loser = t2 if h2h_winner == t1 else t1
                         sorted_teams.remove(h2h_winner)
                         sorted_teams.remove(loser)
                         sorted_teams.insert(1, h2h_winner)
                         sorted_teams.insert(2, loser)
                 elif len(tied_teams_for_spot) >= 3:
-                    # 3隊以上同分互咬 ➡️ 需進行加賽
                     needs_tiebreak = True
 
-        # 若已經登記加賽勝隊，強制將該隊提升為第 2 名
         if not df_team_tiebreak.empty and "加賽勝隊" in df_team_tiebreak.columns:
             tie_winner = df_team_tiebreak.iloc[0]["加賽勝隊"]
             if tie_winner in sorted_teams:
                 sorted_teams.remove(tie_winner)
-                sorted_teams.insert(1, tie_winner) # 插在第 2 名晉級位
+                sorted_teams.insert(1, tie_winner)
 
         return team_stats, sorted_teams, needs_tiebreak, tied_teams_for_spot
 
@@ -607,7 +607,6 @@ elif main_mode == "雙人團體賽 (5組循環+冠亞賽)":
         else:
             team_stats, sorted_teams, needs_tiebreak, tied_teams_for_spot = get_team_standings()
             
-            # --- 平手加賽警示與控制台 ---
             if needs_tiebreak or not df_team_tiebreak.empty:
                 st.write("---")
                 st.warning(f"⚠️ **偵測到預賽平手互咬！** 衝撞隊伍：`{', '.join(tied_teams_for_spot)}` 戰績相同且無法靠直接對戰區分，需進行【現場 1 局加賽】決定最後晉級席位！")
