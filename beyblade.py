@@ -690,33 +690,34 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
             st.dataframe(pd.DataFrame(disp_tm), use_container_width=True, hide_index=True)
 
     # 團體戰績計算邏輯
+   # 團體戰績與破平計算邏輯
     def calculate_team_standings():
-    t_wins = {t: 0 for t in TEAM_NAMES}
-    t_losses = {t: 0 for t in TEAM_NAMES}
-    t_h2h = {}  # 紀錄直接對戰結果
+        t_wins = {t: 0 for t in TEAM_NAMES}
+        t_losses = {t: 0 for t in TEAM_NAMES}
+        t_h2h = {}
 
-    if df_team_matches is not None:
-        for _, row in df_team_matches.iterrows():
-            w = row["勝隊"]
-            t1, t2 = row["隊伍A"], row["隊伍B"]
-            if w in TEAM_NAMES:
-                t_wins[w] += 1
-                l = t2 if w == t1 else t1
-                t_losses[l] += 1
-                t_h2h[(t1, t2)] = w
-                t_h2h[(t2, t1)] = w
+        if df_team_matches is not None:
+            for _, row in df_team_matches.iterrows():
+                w = row["勝隊"]
+                t1, t2 = row["隊伍A"], row["隊伍B"]
+                if w in TEAM_NAMES:
+                    t_wins[w] += 1
+                    l = t2 if w == t1 else t1
+                    t_losses[l] += 1
+                    t_h2h[(t1, t2)] = w
+                    t_h2h[(t2, t1)] = w
 
-    def team_sort_key(t):
-        w_cnt = t_wins[t]
-        # 直接對戰破平：計算在同勝場的隊伍中，自己贏過幾隊
-        h2h_score = sum(
-            1 for other in TEAM_NAMES 
-            if other != t and t_wins[other] == w_cnt and t_h2h.get((t, other)) == t
-        )
-        return (w_cnt, h2h_score)
+        def team_sort_key(t):
+            w_cnt = t_wins[t]
+            # 直接對戰破平：勝場相同時，看誰贏過對方
+            h2h_score = sum(
+                1 for other in TEAM_NAMES 
+                if other != t and t_wins[other] == w_cnt and t_h2h.get((t, other)) == t
+            )
+            return (w_cnt, h2h_score)
 
-    ranked_teams = sorted(TEAM_NAMES, key=team_sort_key, reverse=True)
-    return t_wins, t_losses, ranked_teams
+        ranked_teams = sorted(TEAM_NAMES, key=team_sort_key, reverse=True)
+        return t_wins, t_losses, ranked_teams
 
     # --- Tab 4: 冠亞軍總決賽 ---
     with ttab4:
