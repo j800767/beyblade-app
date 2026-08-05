@@ -393,8 +393,15 @@ if main_mode == "個人賽 (10人瑞士輪+4強)":
                         if resB != "選擇":
                             lossB = semiB['選手2'] if resB == semiB['選手1'] else semiB['選手1']
                             df_finals.loc[df_finals["階段"] == "準決賽B", ["勝者", "敗者"]] = [resB, lossB]
-                            df_finals.loc[df_finals["階段"] == "冠軍賽", "選手2"] = resB
-                            df_finals.loc[df_finals["階段"] == "季軍賽", "選手2"] = lossB
+                           # 季軍賽
+                           loss3 = p3_p2 if res3 == p3_p1 else p3_p1
+                           df_finals.loc[df_finals["階段"] == "季軍賽", "勝者"] = res3
+                           df_finals.loc[df_finals["階段"] == "季軍賽", "敗者"] = loss3
+
+                           # 冠軍賽
+                           lossF = f_p2 if resF == f_p1 else f_p1
+                           df_finals.loc[df_finals["階段"] == "冠軍賽", "勝者"] = resF
+                           df_finals.loc[df_finals["階段"] == "冠軍賽", "敗者"] = lossF
                             save_finals(df_finals); st.rerun()
 
                 with col2:
