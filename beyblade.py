@@ -108,7 +108,7 @@ df_team_matches = load_team_matches()
 df_team_finals = load_team_finals()
 
 # ==========================================
-# 3. 瑞士輪演算演算法 (Swiss-System)
+# 3. 瑞士輪演算演算法 (Swiss-System 修復版)
 # ==========================================
 def calculate_swiss_standings():
     """計算目前的勝敗、對戰紀錄與 SOS 強度分"""
@@ -149,41 +149,42 @@ def calculate_swiss_standings():
     return wins, losses, sos, h2h, played_pairs, ranked_ids, sort_key
 
 def generate_next_round_pairs(current_round):
-    """根據當前戰績與不重複原則，生成下一輪瑞士輪對戰"""
+    """【已修復】根據當前戰績與不重複原則，精確生成下一輪 5 場瑞士輪對戰 (無選手消失 Bug)"""
     wins, losses, _, _, played_pairs, ranked_ids, _ = calculate_swiss_standings()
     
-    # 按當前勝場數進行分組
+    # 按勝場分組 (高勝場 -> 低勝場)
     groups = {}
     for p_id in ranked_ids:
         w = wins[p_id]
         groups.setdefault(w, []).append(p_id)
 
-    unpaired = []
+    sorted_wins = sorted(groups.keys(), reverse=True)
     new_pairs = []
+    pool = []
 
-    # 排序勝場組 (由高到低配對)
-    for w in sorted(groups.keys(), reverse=True):
-        group_players = unpaired + groups[w]
-        unpaired = []
+    # 逐層向下推導配對 (Down-pairing 累加池)
+    for w in sorted_wins:
+        pool.extend(groups[w])
         
-        while len(group_players) >= 2:
-            p1 = group_players.pop(0)
-            found_opponent = False
-            for idx, p2 in enumerate(group_players):
+        i = 0
+        while i < len(pool):
+            p1 = pool[i]
+            found = False
+            for j in range(i + 1, len(pool)):
+                p2 = pool[j]
                 if tuple(sorted([p1, p2])) not in played_pairs:
                     new_pairs.append((p1, p2))
-                    group_players.pop(idx)
-                    found_opponent = True
+                    pool.pop(j)
+                    pool.pop(i)
+                    found = True
                     break
-            
-            # 若組內無法完全配對，將餘下選手向下跨組 (Downpairing)
-            if not found_opponent:
-                unpaired.append(p1)
+            if not found:
+                i += 1  # 無法配對者留在 pool 中，等待與下一個勝場區配對
 
-    # 處理剩餘跨組選手
-    while len(unpaired) >= 2:
-        p1 = unpaired.pop(0)
-        p2 = unpaired.pop(0)
+    # 極端情況退回處理：若池中仍有未配對選手，允許最低限度向下破規，確保產出 5 場
+    while len(pool) >= 2:
+        p1 = pool.pop(0)
+        p2 = pool.pop(0)
         new_pairs.append((p1, p2))
 
     # 轉換為寫入格式
