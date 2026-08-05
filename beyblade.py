@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import os
 import random
 
 # ==========================================
 # 1. 基礎設定與檔案路徑
 # ==========================================
-st.set_page_config(page_title="三重盃 陀螺大賽管理系統", page_icon="💥", layout="wide")
+st.set_page_config(page_title="三重盃 陀螺賽事管理系統", page_icon="💥", layout="wide")
 
 REG_FILE = "players_registration.csv"          # 個人賽檔案 (10人)
 MATCH_FILE = "current_matches.csv"             # 10人單循環賽程檔案 (45場)
@@ -30,9 +29,6 @@ SCHEDULE_45 = [
     (1, 10), (2, 3), (4, 5), (6, 7), (8, 9)
 ]
 
-# 禁卡關鍵字名單（包含神杖、鯊魚、天馬及其俗稱與英文）
-RESTRICTED_KEYWORDS = ["空力天馬", "魔導神杖", "鮫鯊狂鱗", "神杖", "鯊魚", "pegasus", "rod", "shark"]
-
 TEAM_NAMES = ["A組", "B組", "C組", "D組", "E組"]
 
 # ==========================================
@@ -44,14 +40,7 @@ def load_registrations():
         if "編號" not in df.columns:
             df["編號"] = 0
         return df
-    return pd.DataFrame(columns=[
-        "編號", "選手名稱", 
-        "陀螺1_上蓋", "陀螺1_固鎖", "陀螺1_軸心",
-        "陀螺2_上蓋", "陀螺2_固鎖", "陀螺2_軸心",
-        "陀螺3_上蓋", "陀螺3_固鎖", "陀螺3_軸心",
-        "陀螺4_上蓋", "陀螺4_固鎖", "陀螺4_軸心",
-        "陀螺5_上蓋", "陀螺5_固鎖", "陀螺5_軸心"
-    ])
+    return pd.DataFrame(columns=["編號", "選手名稱"])
 
 def save_registrations(df):
     df.to_csv(REG_FILE, index=False, encoding="utf-8-sig")
@@ -81,11 +70,7 @@ def save_finals(df):
 def load_team_data():
     if os.path.exists(TEAM_DATA_FILE): 
         return pd.read_csv(TEAM_DATA_FILE).fillna("")
-    columns = [
-        "組別", "隊員別", "選手名稱", 
-        "陀螺1_上蓋", "陀螺1_固鎖", "陀螺1_軸心", 
-        "陀螺2_上蓋", "陀螺2_固鎖", "陀螺2_軸心"
-    ]
+    columns = ["組別", "隊員別", "選手名稱"]
     default_rows = []
     for team in TEAM_NAMES:
         default_rows.append({"組別": team, "隊員別": "隊員 1", "選手名稱": ""})
@@ -148,75 +133,38 @@ main_mode = st.sidebar.radio("選擇要管理的賽制：", ["個人賽 (10人�
 if main_mode == "個人賽 (10人單循環+4強)":
     st.title("💥 三重盃 個人賽（10人單循環預賽 ➡️ 4強淘汰賽）")
     
-    tabs = st.tabs(["📝 選手登記與抽籤", "⚔️ 預賽：單循環控制台", "🏆 決賽：四強單淘汰", "📊 即時積分榜"])
+    tabs = st.tabs(["📝 選手報名與抽籤", "⚔️ 預賽：單循環控制台", "🏆 決賽：四強單淘汰", "📊 即時積分榜"])
     
-    # --- Tab 1: 選手登記與管理 ---
+    # --- Tab 1: 選手名單管理 ---
     with tabs[0]:
-        st.header("選手改造登記（5選3 備戰規則）")
-        st.markdown("⚠️ **個人禁卡限制**：個人的 5 顆陀螺中，【魔導神杖 / 鮫鯊狂鱗 / 空力天馬】**總共只能出現 1 顆**！且個人的固鎖與軸心不可重複。")
+        st.header("參賽選手報名紀錄")
         if is_admin:
             with st.form("registration_form", clear_on_submit=True):
-                col_name, col_b1, col_b2, col_b3, col_b4, col_b5 = st.columns([1.2, 2, 2, 2, 2, 2])
-                with col_name: name = st.text_input("選手名稱*")
-                with col_b1:
-                    st.markdown("**陀螺 1**")
-                    b1, r1, bit1 = st.text_input("上蓋 1"), st.text_input("固鎖 1"), st.text_input("軸心 1")
-                with col_b2:
-                    st.markdown("**陀螺 2**")
-                    b2, r2, bit2 = st.text_input("上蓋 2"), st.text_input("固鎖 2"), st.text_input("軸心 2")
-                with col_b3:
-                    st.markdown("**陀螺 3**")
-                    b3, r3, bit3 = st.text_input("上蓋 3"), st.text_input("固鎖 3"), st.text_input("軸心 3")
-                with col_b4:
-                    st.markdown("**陀螺 4**")
-                    b4, r4, bit4 = st.text_input("上蓋 4"), st.text_input("固鎖 4"), st.text_input("軸心 4")
-                with col_b5:
-                    st.markdown("**陀螺 5**")
-                    b5, r5, bit5 = st.text_input("上蓋 5"), st.text_input("固鎖 5"), st.text_input("軸心 5")
+                col_name, col_btn = st.columns([3, 1])
+                with col_name:
+                    name = st.text_input("輸入選手名稱*")
+                with col_btn:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    submit_reg = st.form_submit_button("📥 新增選手", use_container_width=True)
                     
-                submit_reg = st.form_submit_button("📥 驗證並新增登記", use_container_width=True)
                 if submit_reg:
-                    if not name.strip(): st.error("❌ 登記失敗：名稱不能為空！")
-                    elif name.strip() in df_reg["選手名稱"].values: st.error(f"❌ 選手【{name}】已登記！")
-                    elif len(df_reg) >= 10: st.error("❌ 登記失敗：個人賽限定 10 人，已滿額！")
+                    if not name.strip(): 
+                        st.error("❌ 報名失敗：名稱不能為空！")
+                    elif name.strip() in df_reg["選手名稱"].values: 
+                        st.error(f"❌ 選手【{name}】已在報名名單中！")
+                    elif len(df_reg) >= 10: 
+                        st.error("❌ 報名失敗：個人賽限定 10 人，已滿額！")
                     else:
-                        ratchets = [r for r in [r1, r2, r3, r4, r5] if r.strip()]
-                        bits = [b for b in [bit1, bit2, bit3, bit4, bit5] if b.strip()]
-                        
-                        if len(ratchets) != len(set(ratchets)) or len(bits) != len(set(bits)):
-                            st.error("❌ 登記失敗：個人的 5 顆陀螺中「固鎖」或「軸心」有零件重複！")
-                        else:
-                            all_blades = [str(b1).lower(), str(b2).lower(), str(b3).lower(), str(b4).lower(), str(b5).lower()]
-                            rest_count = sum(1 for b in all_blades if any(k in b for k in RESTRICTED_KEYWORDS))
-                            
-                            if rest_count > 1:
-                                st.error(f"❌ 違規！個人的 5 顆內偵測到 {rest_count} 顆限制零件（神杖/鯊魚/天馬），限帶 1 顆！")
-                            else:
-                                new_player = {
-                                    "編號": 0,
-                                    "選手名稱": name.strip(),
-                                    "陀螺1_上蓋": b1, "陀螺1_固鎖": r1, "陀螺1_軸心": bit1,
-                                    "陀螺2_上蓋": b2, "陀螺2_固鎖": r2, "陀螺2_軸心": bit2,
-                                    "陀螺3_上蓋": b3, "陀螺3_固鎖": r3, "陀螺3_軸心": bit3,
-                                    "陀螺4_上蓋": b4, "陀螺4_固鎖": r4, "陀螺4_軸心": bit4,
-                                    "陀螺5_上蓋": b5, "陀螺5_固鎖": r5, "陀螺5_軸心": bit5,
-                                }
-                                df_reg = pd.concat([df_reg, pd.DataFrame([new_player])], ignore_index=True)
-                                save_registrations(df_reg)
-                                st.success(f"🎉 選手【{name}】成功通過驗證，完成登記！")
-                                st.rerun()
+                        new_player = {"編號": 0, "選手名稱": name.strip()}
+                        df_reg = pd.concat([df_reg, pd.DataFrame([new_player])], ignore_index=True)
+                        save_registrations(df_reg)
+                        st.success(f"🎉 選手【{name}】成功完成報名！")
+                        st.rerun()
         
         st.write("---")
-        st.subheader(f"👥 已登記選手名單與配置總覽 (共 {len(df_reg)} / 10 人)")
+        st.subheader(f"👥 已報名選手名單 (共 {len(df_reg)} / 10 人)")
         if not df_reg.empty:
-            df_display = df_reg.copy()
-            for i in range(1, 6):
-                df_display[f"💥 陀螺 {i} 配置"] = df_display.apply(
-                    lambda row: f"{row[f'陀螺{i}_上蓋']} ({row[f'陀螺{i}_固鎖']}/{row[f'陀螺{i}_軸心']})"
-                    if row[f'陀螺{i}_上蓋'] else "未配置", axis=1
-                )
-            show_cols = ["編號", "選手名稱", "💥 陀螺 1 配置", "💥 陀螺 2 配置", "💥 陀螺 3 配置", "💥 陀螺 4 配置", "💥 陀螺 5 配置"]
-            st.dataframe(df_display[show_cols], use_container_width=True)
+            st.dataframe(df_reg[["編號", "選手名稱"]], use_container_width=True)
 
         if is_admin:
             if len(df_reg) == 10 and (df_reg["編號"] == 0).all():
@@ -241,10 +189,10 @@ if main_mode == "個人賽 (10人單循環+4強)":
                     st.rerun()
 
             st.write("---")
-            st.subheader("⚙️ 個人賽名單管理控制台")
+            st.subheader("⚙️ 名單管理控制台")
             del_col1, del_col2 = st.columns([2, 1])
             with del_col1:
-                target_player = st.selectbox("選擇要刪除的個人賽選手", df_reg["選手名稱"].tolist()) if not df_reg.empty else None
+                target_player = st.selectbox("選擇要刪除的選手", df_reg["選手名稱"].tolist()) if not df_reg.empty else None
             with del_col2:
                 st.markdown("<br>", unsafe_allow_html=True)
                 if target_player and st.button(f"🗑️ 刪除選手 {target_player}", use_container_width=True):
@@ -255,11 +203,11 @@ if main_mode == "個人賽 (10人單循環+4強)":
                     st.warning(f"已刪除選手【{target_player}】。")
                     st.rerun()
             
-            if st.button("🚨 一鍵清空所有【個人賽登記名單與成績】", type="secondary", use_container_width=True):
+            if st.button("🚨 一鍵清空所有【個人賽名單與成績】", type="secondary", use_container_width=True):
                 if os.path.exists(REG_FILE): os.remove(REG_FILE)
                 save_matches(None)
                 save_finals(None)
-                st.error("💥 個人賽所有登記資料、對戰賽程與數據已完全清空！")
+                st.error("💥 個人賽所有名單與戰績已完全清空！")
                 st.rerun()
 
     # 取得編號對照字典
@@ -270,12 +218,11 @@ if main_mode == "個人賽 (10人單循環+4強)":
         st.header("⚔️ 預賽：10人單循環對戰控制台")
         
         if df_matches is None or (df_reg["編號"] == 0).all():
-            st.warning("⏳ 需先在「選手登記」分頁集滿 10 人並進行【盲抽編號】後，才能開始單循環賽！")
+            st.warning("⏳ 需先在「選手報名」分頁集滿 10 人並進行【盲抽編號】後，才能開始單循環賽！")
         else:
             completed_count = sum(1 for w in df_matches["勝者_編號"] if w != 0)
             st.progress(completed_count / 45, text=f"預賽進度：{completed_count} / 45 場")
             
-            # 場次選擇器
             selected_match_idx = st.number_input("選擇對戰場次：", min_value=1, max_value=45, value=min(completed_count + 1, 45), step=1)
             match_row = df_matches[df_matches["場次"] == selected_match_idx].iloc[0]
             
@@ -285,22 +232,8 @@ if main_mode == "個人賽 (10人單循環+4強)":
             p2_name = player_map.get(p2_id, f"{p2_id}號")
             current_winner_id = int(match_row["勝者_編號"])
 
-            st.info(f"### 🥊 第 {selected_match_idx} 場對戰\n\n### **🔴 {p1_id}號 {p1_name}**  🆚  **🔵 {p2_id}號 {p2_name}**")
+            st.info(f"### 🥊 第 {selected_match_idx} 場對戰\n\n## **🔴 {p1_id}號 {p1_name}**  🆚  **🔵 {p2_id}號 {p2_name}**")
             
-            # 展示雙方裝備 (5顆)
-            df_p1 = df_reg[df_reg["編號"] == p1_id].iloc[0]
-            df_p2 = df_reg[df_reg["編號"] == p2_id].iloc[0]
-            
-            m_col1, m_col2 = st.columns(2)
-            with m_col1:
-                st.markdown(f"**🔴 {p1_id}號 {p1_name} 裝備配置：**")
-                for i in range(1, 6):
-                    st.write(f"{i}. **{df_p1[f'陀螺{i}_上蓋']}** ({df_p1[f'陀螺{i}_固鎖']} / {df_p1[f'陀螺{i}_軸心']})")
-            with m_col2:
-                st.markdown(f"**🔵 {p2_id}號 {p2_name} 裝備配置：**")
-                for i in range(1, 6):
-                    st.write(f"{i}. **{df_p2[f'陀螺{i}_上蓋']}** ({df_p2[f'陀螺{i}_固鎖']} / {df_p2[f'陀螺{i}_軸心']})")
-
             st.write("---")
             if is_admin:
                 st.write("**登記勝者：**")
@@ -320,7 +253,7 @@ if main_mode == "個人賽 (10人單循環+4強)":
                 st.write(f"**當前比賽結果**：`{w_str}`")
 
     # ==========================================
-    # 進階戰績與同分破局計算 (Tie-breaker Logic - 10人版)
+    # 進階戰績與同分破局計算
     # ==========================================
     def calculate_standings():
         wins_dict = {p_id: 0 for p_id in range(1, 11)}
@@ -347,13 +280,11 @@ if main_mode == "個人賽 (10人單循環+4強)":
         def sort_key(p_id):
             wins = wins_dict[p_id]
             sos = sos_dict[p_id]
-            
             h2h_score = 0
             for other_id in range(1, 11):
                 if other_id != p_id and wins_dict[other_id] == wins:
                     if h2h.get((p_id, other_id)) == p_id:
                         h2h_score += 1
-
             return (wins, h2h_score, sos)
 
         ranked_ids = sorted(range(1, 11), key=sort_key, reverse=True)
@@ -423,8 +354,7 @@ if main_mode == "個人賽 (10人單循環+4強)":
                     if is_admin and p3_p1 != "準決賽A敗者" and p3_p2 != "準決賽B敗者" and place3["勝者"] == "尚未決定":
                         res3 = st.selectbox("回報季軍賽勝者", ["選擇", p3_p1, p3_p2], key="p3_s")
                         if res3 != "選擇":
-                            loss3 = p3_p2 if res3 == p3_p1 else p3_p1
-                            df_finals.loc[df_finals["階段"] == "季軍賽", ["勝者", "敗者"]] = [res3, loss3]
+                            df_finals.loc[df_finals["階段"] == "季軍賽", ["勝者", "敗者"]] = [res3, p3_p2 if res3 == p3_p1 else p3_p1]
                             save_finals(df_finals); st.rerun()
                     st.write("---")
                     f_p1, f_p2 = final_m['選手1'], final_m['選手2']
@@ -432,18 +362,16 @@ if main_mode == "個人賽 (10人單循環+4強)":
                     if is_admin and f_p1 != "準決賽A勝者" and f_p2 != "準決賽B勝者" and final_m["勝者"] == "尚未決定":
                         resF = st.selectbox("回報冠軍賽勝者", ["選擇", f_p1, f_p2], key="final_s")
                         if resF != "選擇":
-                            lossF = f_p2 if resF == f_p1 else f_p1
-                            df_finals.loc[df_finals["階段"] == "冠軍賽", ["勝者", "敗者"]] = [resF, lossF]
+                            df_finals.loc[df_finals["階段"] == "冠軍賽", ["勝者", "敗者"]] = [resF, f_p2 if resF == f_p1 else f_p1]
                             save_finals(df_finals); st.rerun()
                 
                 if final_m["勝者"] != "尚未決定" and place3["勝者"] != "尚未決定":
-                    st.success("🏆 恭喜本次大賽最終前三名誕生！")
                     st.balloons()
                     st.markdown(f"### 🎖️ 三重盃 榮譽殿堂\n* 🥇 **冠軍**：{final_m['勝者']}\n* 🥈 **亞軍**：{final_m['敗者']}\n* 🥉 **季軍**：{place3['勝者']}")
 
     # --- Tab 4: 排行榜 ---
     with tabs[3]:
-        st.header("📊 預賽即時戰績積分榜（含 Tie-breaker 同分破局機制）")
+        st.header("📊 預賽即時戰績積分榜")
         st.caption("💡 排名優先順序：1. 總勝場 ➡️ 2. 對戰勝負 (Head-to-Head) ➡️ 3. 戰績強度 (擊敗對手的總勝場數)")
         
         if df_reg.empty or (df_reg["編號"] == 0).all():
@@ -455,23 +383,16 @@ if main_mode == "個人賽 (10人單循環+4強)":
             for i in range(len(ranked_ids) - 1):
                 id1, id2 = ranked_ids[i], ranked_ids[i+1]
                 if sort_key(id1) == sort_key(id2) and wins_dict[id1] > 0:
-                    tie_break_needed.add(id1)
-                    tie_break_needed.add(id2)
+                    tie_break_needed.add(id1); tie_break_needed.add(id2)
 
             table_data = []
             for rank, p_id in enumerate(ranked_ids, 1):
-                wins = wins_dict[p_id]
-                losses = losses_dict[p_id]
-                sos = sos_dict[p_id]
+                wins, losses, sos = wins_dict[p_id], losses_dict[p_id], sos_dict[p_id]
                 
-                if p_id in tie_break_needed and rank in [4, 5]:
-                    status_str = "⚔️ 需 1 分制加賽爭奪 4 強"
-                elif p_id in tie_break_needed:
-                    status_str = "⚠️ 同分/同強度待加賽"
-                elif rank <= 4:
-                    status_str = "🟢 晉級 4 強"
-                else:
-                    status_str = "🔴 預賽淘汰"
+                if p_id in tie_break_needed and rank in [4, 5]: status_str = "⚔️ 需加賽爭奪 4 強"
+                elif p_id in tie_break_needed: status_str = "⚠️ 同分待加賽"
+                elif rank <= 4: status_str = "🟢 晉級 4 強"
+                else: status_str = "🔴 預賽淘汰"
 
                 table_data.append({
                     "預賽排名": f"第 {rank} 名",
@@ -479,7 +400,7 @@ if main_mode == "個人賽 (10人單循環+4強)":
                     "選手名稱": player_map.get(p_id, "未定"),
                     "勝場": f"{wins} 勝",
                     "敗場": f"{losses} 敗",
-                    "戰績強度 (對手勝場)": f"{sos} 分",
+                    "戰績強度": f"{sos} 分",
                     "晉級狀態": status_str
                 })
             st.table(table_data)
@@ -488,120 +409,57 @@ if main_mode == "個人賽 (10人單循環+4強)":
 # 5. 模式二：雙人團體賽 (10人 5組 A~E)
 # ==========================================
 elif main_mode == "雙人團體賽 (獨立區)":
-    st.title("🤝 三重盃 雙人團體賽獨立登記與淘汰賽系統")
+    st.title("🤝 三重盃 雙人團體賽獨立報名與淘汰賽系統")
     
-    team_tabs = st.tabs(["📝 5組選手名單配置", "🏆 團體淘汰賽賽程表"])
+    team_tabs = st.tabs(["📝 5組選手名單管理", "🏆 團體淘汰賽賽程表"])
     
-    # --- 團體賽分頁 1：名單配置 ---
+    # --- 團體賽分頁 1：名單管理 ---
     with team_tabs[0]:
-        st.markdown("### 📝 賽制規則：共 5 個組別（A~E），每組固定 2 人（總計 10 人），每人登記 2 顆陀螺。")
-        st.markdown("⚠️ **整組禁卡限制**：該組兩位隊員（**共 4 顆陀螺**）中，【魔導神杖 / 鮫鯊狂鱗 / 空力天馬】**總共只能出現 1 顆**！且個人配置的固鎖與軸心不可重複。")
-        
-        def validate_team_setup(team_name, p1_data, p2_data):
-            if not p1_data["name"].strip() or not p2_data["name"].strip():
-                return False, f"❌ {team_name} 驗證失敗：兩位隊員的「選手名稱」皆不能留空！"
-            p1_ratchets = [r for r in [p1_data["r1"], p1_data["r2"]] if r.strip()]
-            p1_bits = [b for b in [p1_data["bit1"], p1_data["bit2"]] if b.strip()]
-            if len(p1_ratchets) != len(set(p1_ratchets)): return False, f"❌ {team_name} 驗證失敗：{p1_data['name']} 的固鎖零件重複！"
-            if len(p1_bits) != len(set(p1_bits)): return False, f"❌ {team_name} 驗證失敗：{p1_data['name']} 的軸心零件重複！"
-            
-            p2_ratchets = [r for r in [p2_data["r1"], p2_data["r2"]] if r.strip()]
-            p2_bits = [b for b in [p2_data["bit1"], p2_data["bit2"]] if b.strip()]
-            if len(p2_ratchets) != len(set(p2_ratchets)): return False, f"❌ {team_name} 驗證失敗：{p2_data['name']} 的固鎖零件重複！"
-            if len(p2_bits) != len(set(p2_bits)): return False, f"❌ {team_name} 驗證失敗：{p2_data['name']} 的軸心零件重複！"
-
-            all_blades = [str(p1_data["b1"]).lower(), str(p1_data["b2"]).lower(), str(p2_data["b1"]).lower(), str(p2_data["b2"]).lower()]
-            restricted_count = sum(1 for b in all_blades if any(keyword in b for keyword in RESTRICTED_KEYWORDS))
-            if restricted_count > 1:
-                return False, f"❌ {team_name} 禁卡表違規！偵測到 {restricted_count} 顆限制零件（神杖/鯊魚/天馬，整組限 1 顆）！"
-            return True, ""
-
+        st.markdown("### 📝 賽制說明：共 5 個組別（A~E），每組 2 位隊員。")
         st.write("---")
+        
         ui_inputs = {}
-
-        # 使用兩欄排版 5 個組別
         form_cols = st.columns(2)
         for idx, team in enumerate(TEAM_NAMES):
             with form_cols[idx % 2]:
-                st.subheader(f"🛡️ 團體賽 - {team} 配置面板")
+                st.subheader(f"🛡️ 團體賽 - {team} 名單")
                 row_p1 = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 1")].iloc[0]
                 row_p2 = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 2")].iloc[0]
                 
-                st.markdown(f"**👤 隊員 1 配置**")
-                p1_name = st.text_input(f"選手名稱 (隊員1)", value=str(row_p1["選手名稱"]), key=f"{team}_p1_name", disabled=not is_admin)
-                c1, c2 = st.columns(2)
-                with c1:
-                    p1_b1 = st.text_input("陀螺1_上蓋", value=str(row_p1["陀螺1_上蓋"]), key=f"{team}_p1_b1", disabled=not is_admin)
-                    p1_r1 = st.text_input("陀螺1_固鎖", value=str(row_p1["陀螺1_固鎖"]), key=f"{team}_p1_r1", disabled=not is_admin)
-                    p1_bit1 = st.text_input("陀螺1_軸心", value=str(row_p1["陀螺1_軸心"]), key=f"{team}_p1_bit1", disabled=not is_admin)
-                with c2:
-                    p1_b2 = st.text_input("陀螺2_上蓋", value=str(row_p1["陀螺2_上蓋"]), key=f"{team}_p1_b2", disabled=not is_admin)
-                    p1_r2 = st.text_input("陀螺2_固鎖", value=str(row_p1["陀螺2_固鎖"]), key=f"{team}_p1_r2", disabled=not is_admin)
-                    p1_bit2 = st.text_input("陀螺2_軸心", value=str(row_p1["陀螺2_軸心"]), key=f"{team}_p1_bit2", disabled=not is_admin)
-                    
-                st.markdown(f"**👤 隊員 2 配置**")
-                p2_name = st.text_input(f"選手名稱 (隊員2)", value=str(row_p2["選手名稱"]), key=f"{team}_p2_name", disabled=not is_admin)
-                c3, c4 = st.columns(2)
-                with c3:
-                    p2_b1 = st.text_input("陀螺1_上蓋", value=str(row_p2["陀螺1_上蓋"]), key=f"{team}_p2_b1", disabled=not is_admin)
-                    p2_r1 = st.text_input("陀螺1_固鎖", value=str(row_p2["陀螺1_固鎖"]), key=f"{team}_p2_r1", disabled=not is_admin)
-                    p2_bit1 = st.text_input("陀螺1_軸心", value=str(row_p2["陀螺1_軸心"]), key=f"{team}_p2_bit1", disabled=not is_admin)
-                with c4:
-                    p2_b2 = st.text_input("陀螺2_上蓋", value=str(row_p2["陀螺2_上蓋"]), key=f"{team}_p2_b2", disabled=not is_admin)
-                    p2_r2 = st.text_input("陀螺2_固鎖", value=str(row_p2["陀螺2_固鎖"]), key=f"{team}_p2_r2", disabled=not is_admin)
-                    p2_bit2 = st.text_input("陀螺2_軸心", value=str(row_p2["陀螺2_軸心"]), key=f"{team}_p2_bit2", disabled=not is_admin)
-                    
-                ui_inputs[team] = {
-                    "p1": {"name": p1_name, "b1": p1_b1, "r1": p1_r1, "bit1": p1_bit1, "b2": p1_b2, "r2": p1_r2, "bit2": p1_bit2},
-                    "p2": {"name": p2_name, "b1": p2_b1, "r1": p2_r1, "bit1": p2_bit1, "b2": p2_b2, "r2": p2_r2, "bit2": p2_bit2}
-                }
+                p1_name = st.text_input(f"隊員 1 姓名", value=str(row_p1["選手名稱"]), key=f"{team}_p1_name", disabled=not is_admin)
+                p2_name = st.text_input(f"隊員 2 姓名", value=str(row_p2["選手名稱"]), key=f"{team}_p2_name", disabled=not is_admin)
+                
+                ui_inputs[team] = {"p1": p1_name, "p2": p2_name}
                 st.write("---")
 
         if is_admin:
-            if st.button("💾 驗證禁卡表並儲存 5 組團體賽名單", type="primary", use_container_width=True):
-                passed_all = True
+            if st.button("💾 儲存 5 組團體賽選手名單", type="primary", use_container_width=True):
+                new_rows = []
                 for team in TEAM_NAMES:
-                    p1_in, p2_in = ui_inputs[team]["p1"], ui_inputs[team]["p2"]
-                    if not p1_in["name"].strip() and not p2_in["name"].strip(): continue
-                    success, err_msg = validate_team_setup(team, p1_in, p2_in)
-                    if not success: st.error(err_msg); passed_all = False
-                
-                if passed_all:
-                    new_rows = []
-                    for team in TEAM_NAMES:
-                        p1, p2 = ui_inputs[team]["p1"], ui_inputs[team]["p2"]
-                        new_rows.append({"組別": team, "隊員別": "隊員 1", "選手名稱": p1["name"].strip(), "陀螺1_上蓋": p1["b1"], "陀螺1_固鎖": p1["r1"], "陀螺1_軸心": p1["bit1"], "陀螺2_上蓋": p1["b2"], "陀螺2_固鎖": p1["r2"], "陀螺2_軸心": p1["bit2"]})
-                        new_rows.append({"組別": team, "隊員別": "隊員 2", "選手名稱": p2["name"].strip(), "陀螺1_上蓋": p2["b1"], "陀螺1_固鎖": p2["r1"], "陀螺1_軸心": p2["bit1"], "陀螺2_上蓋": p2["b2"], "陀螺2_固鎖": p2["r2"], "陀螺2_軸心": p2["bit2"]})
-                    df_teams = pd.DataFrame(new_rows)
-                    save_team_data(df_teams); st.success("🎉 團體賽名單儲存成功！"); st.rerun()
+                    new_rows.append({"組別": team, "隊員別": "隊員 1", "選手名稱": ui_inputs[team]["p1"].strip()})
+                    new_rows.append({"組別": team, "隊員別": "隊員 2", "選手名稱": ui_inputs[team]["p2"].strip()})
+                df_teams = pd.DataFrame(new_rows)
+                save_team_data(df_teams)
+                st.success("🎉 團體賽名單儲存成功！")
+                st.rerun()
 
         st.write("---")
-        st.subheader("📊 當前已儲存的團體賽選手名單總覽")
+        st.subheader("📊 當前團體賽選手名單總覽")
         st.dataframe(df_teams, use_container_width=True)
 
         if is_admin:
             st.write("---")
-            st.subheader("⚙️ 團體賽名單管理控制台")
-            del_col1, del_col2 = st.columns([2, 1])
-            with del_col1:
-                target_team = st.selectbox("選擇要刪除並清空的組別", TEAM_NAMES)
-            with del_col2:
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.button(f"🗑️ 清空 {target_team} 資料", use_container_width=True):
-                    for col in df_teams.columns:
-                        if col != "組別" and col != "隊員別": df_teams.loc[df_teams["組別"] == target_team, col] = ""
-                    save_team_data(df_teams); st.warning(f"已清除【{target_team}】登記資料。"); st.rerun()
-            
-            if st.button("🚨 一鍵重置並【清空所有 5 組】名單資料", type="secondary", use_container_width=True):
-                columns = ["組別", "隊員別", "選手名稱", "陀螺1_上蓋", "陀螺1_固鎖", "陀螺1_軸心", "陀螺2_上蓋", "陀螺2_固鎖", "陀螺2_軸心"]
+            if st.button("🚨 一鍵清空所有團體賽名單", type="secondary", use_container_width=True):
                 default_rows = []
                 for team in TEAM_NAMES:
                     default_rows.append({"組別": team, "隊員別": "隊員 1", "選手名稱": ""})
                     default_rows.append({"組別": team, "隊員別": "隊員 2", "選手名稱": ""})
-                df_reset = pd.DataFrame(default_rows, columns=columns)
-                save_team_data(df_reset); st.error("💥 團體賽所有組別名單已完全清空重置！"); st.rerun()
+                df_reset = pd.DataFrame(default_rows)
+                save_team_data(df_reset)
+                st.error("💥 團體賽所有名單已完全清空！")
+                st.rerun()
 
-    # --- 團體賽分頁 2：單敗淘汰賽賽程區 (5隊淘汰賽) ---
+    # --- 團體賽分頁 2：淘汰賽區 ---
     with team_tabs[1]:
         st.header("🏆 5隊團體單敗淘汰賽程")
         def get_team_members_str(team_code):
@@ -611,22 +469,21 @@ elif main_mode == "雙人團體賽 (獨立區)":
             return f"({ ' ＆ '.join(members_clean) })" if members_clean else "(未登記選手)"
 
         if df_team_matches is None:
-            st.info("💡 目前尚無淘汰賽賽程。點擊下方按鈕將 A, B, C, D, E 五組隨機抽籤：1 組抽中幸運種子輪空直升 4 強，其餘 4 組對決爭取另 2 個 4 強席位。")
+            st.info("💡 點擊下方按鈕將 A, B, C, D, E 五組進行隨機抽籤：1 組種子輪空直升準決賽，其餘 4 組對決爭取晉級。")
             if is_admin and st.button("🎲 隨機抽籤生成 5隊淘汰賽程表", type="primary", use_container_width=True):
                 teams_list = TEAM_NAMES.copy()
                 random.shuffle(teams_list)
                 
-                # 5隊抽籤：teams_list[0] 輪空直接進入準決賽1
                 bracket_data = [
-                    {"場次編號": "QF1", "階段": "預賽 (Qualifying)", "組別A": teams_list[1], "組別B": teams_list[2], "勝者": "尚未決定"},
-                    {"場次編號": "QF2", "階段": "預賽 (Qualifying)", "組別A": teams_list[3], "組別B": teams_list[4], "勝者": "尚未決定"},
+                    {"場次編號": "QF1", "階段": "預賽", "組別A": teams_list[1], "組別B": teams_list[2], "勝者": "尚未決定"},
+                    {"場次編號": "QF2", "階段": "預賽", "組別A": teams_list[3], "組別B": teams_list[4], "勝者": "尚未決定"},
                     {"場次編號": "SF1", "階段": "準決賽 1", "組別A": teams_list[0], "組別B": "QF1勝者", "勝者": "尚未決定"},
                     {"場次編號": "SF2", "階段": "準決賽 2", "組別A": "QF2勝者", "組別B": "輪空晉級", "勝者": "尚未決定"},
                     {"場次編號": "F1",  "階段": "總決賽", "組別A": "TBD", "組別B": "TBD", "勝者": "尚未決定"}
                 ]
-                # SF2 如果只有 QF2勝者，代表直接進總決賽
                 df_team_matches = pd.DataFrame(bracket_data)
-                save_team_matches(df_team_matches); st.rerun()
+                save_team_matches(df_team_matches)
+                st.rerun()
         else:
             qf1 = df_team_matches[df_team_matches["場次編號"] == "QF1"].iloc[0]
             qf2 = df_team_matches[df_team_matches["場次編號"] == "QF2"].iloc[0]
@@ -636,11 +493,11 @@ elif main_mode == "雙人團體賽 (獨立區)":
             st.markdown("### 📊 賽程樹狀總覽")
             b_col1, b_col2, b_col3 = st.columns(3)
             with b_col1:
-                st.info(f"🧱 **外卡外圍賽 (QF1)**\n\n【{qf1['組別A']}】 vs 【{qf1['組別B']}】\n\n ➡️ 勝者：`{qf1['勝者']}`")
-                st.info(f"🧱 **外卡外圍賽 (QF2)**\n\n【{qf2['組別A']}】 vs 【{qf2['組別B']}】\n\n ➡️ 勝者：`{qf2['勝者']}`")
+                st.info(f"🧱 **預賽 Match 1 (QF1)**\n\n【{qf1['組別A']}】 vs 【{qf1['組別B']}】\n\n ➡️ 勝者：`{qf1['勝者']}`")
+                st.info(f"🧱 **預賽 Match 2 (QF2)**\n\n【{qf2['組別A']}】 vs 【{qf2['組別B']}】\n\n ➡️ 勝者：`{qf2['勝者']}`")
             with b_col2:
                 st.info(f"⚔️ **準決賽 1**\n\n【{sf1['組別A']} (種子)】 vs 【{sf1['組別B']}】\n\n ➡️ 勝者：`{sf1['勝者']}`")
-                st.info(f"⚔️ **準決賽 2**\n\n【{qf2['勝者']}】 (過關直升決賽)")
+                st.info(f"⚔️ **準決賽 2**\n\n【{qf2['勝者']}】 (直升總決賽)")
             with b_col3:
                 st.warning(f"👑 **{f1['階段']}**\n\n【{f1['組別A']}】 vs 【{f1['組別B']}】\n\n ➡️ 總冠軍：`{f1['勝者']}`")
                 if f1['勝者'] != "尚未決定":
@@ -648,67 +505,60 @@ elif main_mode == "雙人團體賽 (獨立區)":
                     st.success(f"🎉 恭喜本屆三重盃團體賽總冠軍：\n\n### 🏆 {f1['勝者']} {get_team_members_str(f1['勝者'])} 🏆")
             
             st.write("---")
-            st.markdown("### 🥊 賽事評分與晉級控制台")
+            st.markdown("### 🥊 賽事勝負回報")
             
             # QF1
-            with st.container():
-                c_info, c_score = st.columns([3, 1])
-                with c_info:
-                    st.markdown(f"#### 📅 外圍預賽 Match 1 (QF1)")
-                    st.write(f"**{qf1['組別A']}** {get_team_members_str(qf1['組別A'])}  🆚  **{qf1['組別B']}** {get_team_members_str(qf1['組別B'])}")
-                with c_score:
-                    if is_admin and qf1['勝者'] == "尚未決定":
-                        qf1_win = st.selectbox("回報 QF1 勝者", ["選擇勝組", qf1['組別A'], qf1['組別B']], key="sel_qf1")
-                        if qf1_win != "選擇勝組":
-                            df_team_matches.loc[df_team_matches["場次編號"] == "QF1", "勝者"] = qf1_win
-                            df_team_matches.loc[df_team_matches["場次編號"] == "SF1", "組別B"] = qf1_win
-                            save_team_matches(df_team_matches); st.rerun()
+            c_info, c_score = st.columns([3, 1])
+            with c_info:
+                st.write(f"**預賽 QF1**：**{qf1['組別A']}** {get_team_members_str(qf1['組別A'])} 🆚 **{qf1['組別B']}** {get_team_members_str(qf1['組別B'])}")
+            with c_score:
+                if is_admin and qf1['勝者'] == "尚未決定":
+                    qf1_win = st.selectbox("回報 QF1 勝者", ["選擇勝組", qf1['組別A'], qf1['組別B']], key="sel_qf1")
+                    if qf1_win != "選擇勝組":
+                        df_team_matches.loc[df_team_matches["場次編號"] == "QF1", "勝者"] = qf1_win
+                        df_team_matches.loc[df_team_matches["場次編號"] == "SF1", "組別B"] = qf1_win
+                        save_team_matches(df_team_matches); st.rerun()
 
             st.write("---")
             # QF2
-            with st.container():
-                c_info, c_score = st.columns([3, 1])
-                with c_info:
-                    st.markdown(f"#### 📅 外圍預賽 Match 2 (QF2)")
-                    st.write(f"**{qf2['組別A']}** {get_team_members_str(qf2['組別A'])}  🆚  **{qf2['組別B']}** {get_team_members_str(qf2['組別B'])}")
-                with c_score:
-                    if is_admin and qf2['勝者'] == "尚未決定":
-                        qf2_win = st.selectbox("回報 QF2 勝者", ["選擇勝組", qf2['組別A'], qf2['組別B']], key="sel_qf2")
-                        if qf2_win != "選擇勝組":
-                            df_team_matches.loc[df_team_matches["場次編號"] == "QF2", "勝者"] = qf2_win
-                            df_team_matches.loc[df_team_matches["場次編號"] == "F1", "組別B"] = qf2_win
-                            save_team_matches(df_team_matches); st.rerun()
+            c_info, c_score = st.columns([3, 1])
+            with c_info:
+                st.write(f"**預賽 QF2**：**{qf2['組別A']}** {get_team_members_str(qf2['組別A'])} 🆚 **{qf2['組別B']}** {get_team_members_str(qf2['組別B'])}")
+            with c_score:
+                if is_admin and qf2['勝者'] == "尚未決定":
+                    qf2_win = st.selectbox("回報 QF2 勝者", ["選擇勝組", qf2['組別A'], qf2['組別B']], key="sel_qf2")
+                    if qf2_win != "選擇勝組":
+                        df_team_matches.loc[df_team_matches["場次編號"] == "QF2", "勝者"] = qf2_win
+                        df_team_matches.loc[df_team_matches["場次編號"] == "F1", "組別B"] = qf2_win
+                        save_team_matches(df_team_matches); st.rerun()
 
             st.write("---")
             # SF1
-            with st.container():
-                c_info, c_score = st.columns([3, 1])
-                with c_info:
-                    st.markdown(f"#### 📅 準決賽 (SF1)")
-                    st.write(f"**{sf1['組別A']} (種子輪空隊)** {get_team_members_str(sf1['組別A'])}  🆚  **{sf1['組別B']}** {get_team_members_str(sf1['組別B'])}")
-                with c_score:
-                    if is_admin and sf1['組別B'] != "QF1勝者" and sf1['勝者'] == "尚未決定":
-                        sf1_win = st.selectbox("回報 SF1 勝者", ["選擇勝組", sf1['組別A'], sf1['組別B']], key="sel_sf1")
-                        if sf1_win != "選擇勝組":
-                            df_team_matches.loc[df_team_matches["場次編號"] == "SF1", "勝者"] = sf1_win
-                            df_team_matches.loc[df_team_matches["場次編號"] == "F1", "組別A"] = sf1_win
-                            save_team_matches(df_team_matches); st.rerun()
+            c_info, c_score = st.columns([3, 1])
+            with c_info:
+                st.write(f"**準決賽 SF1**：**{sf1['組別A']} (種子隊)** {get_team_members_str(sf1['組別A'])} 🆚 **{sf1['組別B']}** {get_team_members_str(sf1['組別B'])}")
+            with c_score:
+                if is_admin and sf1['組別B'] != "QF1勝者" and sf1['勝者'] == "尚未決定":
+                    sf1_win = st.selectbox("回報 SF1 勝者", ["選擇勝組", sf1['組別A'], sf1['組別B']], key="sel_sf1")
+                    if sf1_win != "選擇勝組":
+                        df_team_matches.loc[df_team_matches["場次編號"] == "SF1", "勝者"] = sf1_win
+                        df_team_matches.loc[df_team_matches["場次編號"] == "F1", "組別A"] = sf1_win
+                        save_team_matches(df_team_matches); st.rerun()
 
             st.write("---")
             # F1
-            with st.container():
-                c_info, c_score = st.columns([3, 1])
-                with c_info:
-                    st.markdown(f"#### 🏆 冠軍總決賽 (Grand Final)")
-                    st.write(f"**{f1['組別A']}** {get_team_members_str(f1['組別A'])}  🆚  **{f1['組別B']}** {get_team_members_str(f1['組別B'])}")
-                with c_score:
-                    if is_admin and f1['組別A'] != "TBD" and f1['組別B'] != "TBD" and f1['勝者'] == "尚未決定":
-                        f1_win = st.selectbox("回報總冠軍", ["選擇總冠軍", f1['組別A'], f1['組別B']], key="sel_f1")
-                        if f1_win != "選擇總冠軍":
-                            df_team_matches.loc[df_team_matches["場次編號"] == "F1", "勝者"] = f1_win
-                            save_team_matches(df_team_matches); st.rerun()
+            c_info, c_score = st.columns([3, 1])
+            with c_info:
+                st.write(f"**總決賽 Grand Final**：**{f1['組別A']}** {get_team_members_str(f1['組別A'])} 🆚 **{f1['組別B']}** {get_team_members_str(f1['組別B'])}")
+            with c_score:
+                if is_admin and f1['組別A'] != "TBD" and f1['組別B'] != "TBD" and f1['勝者'] == "尚未決定":
+                    f1_win = st.selectbox("回報總冠軍", ["選擇總冠軍", f1['組別A'], f1['組別B']], key="sel_f1")
+                    if f1_win != "選擇總冠軍":
+                        df_team_matches.loc[df_team_matches["場次編號"] == "F1", "勝者"] = f1_win
+                        save_team_matches(df_team_matches); st.rerun()
                             
             if is_admin:
                 st.write("<br>", unsafe_allow_html=True)
-                if st.button("🚨 重置並清空此淘汰賽程表 (重新抽籤)", type="secondary", use_container_width=True):
-                    save_team_matches(None); st.rerun()
+                if st.button("🚨 重置淘汰賽程表 (重新抽籤)", type="secondary", use_container_width=True):
+                    save_team_matches(None)
+                    st.rerun()
