@@ -19,7 +19,6 @@ TEAM_FINALS_FILE = "team_finals_matches.csv"   # 團體賽冠亞軍決賽檔案
 ADMIN_PASSWORD = "admin"  # 管理員預設密碼
 TEAM_NAMES = ["A組", "B組", "C組", "D組", "E組"]
 
-# 5 隊單循環 10 場固定對戰組合
 TEAM_SCHEDULE_10 = [
     ("A組", "B組"), ("C組", "D組"),
     ("A組", "C組"), ("B組", "E組"),
@@ -108,7 +107,7 @@ df_team_matches = load_team_matches()
 df_team_finals = load_team_finals()
 
 # ==========================================
-# 3. 瑞士輪演算演算法 (Swiss-System)
+# 3. 瑞士輪演算法
 # ==========================================
 def calculate_swiss_standings():
     wins = {p_id: 0 for p_id in range(1, 11)}
@@ -199,7 +198,6 @@ def generate_next_round_pairs(current_round):
 if "is_admin" not in st.session_state:
     st.session_state["is_admin"] = False
 
-# 管理員驗證與賽制選擇
 st.sidebar.header("🔑 管理者驗證專區")
 is_admin_check = st.sidebar.checkbox("開啟管理員控制權限", value=st.session_state["is_admin"])
 
@@ -240,6 +238,7 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
     with tab1:
         st.header("📝 選手報名與抽籤初始化")
         
+        # 管理員新增區塊
         if is_admin:
             with st.form("reg_form", clear_on_submit=True):
                 col_name, col_btn = st.columns([3, 1])
@@ -264,8 +263,29 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                         st.rerun()
 
         st.subheader(f"👥 已報名選手名單 (共 {len(df_reg)} / 10 人)")
-        st.dataframe(df_reg[["編號", "選手名稱"]], use_container_width=True)
 
+        # 顯示列表與單一選手刪除功能
+        if not df_reg.empty:
+            if is_admin:
+                # 管理員模式：逐筆顯示，後方附帶刪除按鈕
+                for idx, row in df_reg.iterrows():
+                    col_info, col_del = st.columns([4, 1])
+                    with col_info:
+                        p_num = f"{int(row['編號'])} 號" if row["編號"] != 0 else "尚未抽籤"
+                        st.write(f"• **{row['選手名稱']}** （編號：{p_num}）")
+                    with col_del:
+                        if st.button("🗑️ 刪除", key=f"del_player_{idx}"):
+                            df_reg = df_reg.drop(idx).reset_index(drop=True)
+                            save_registrations(df_reg)
+                            st.toast(f"已刪除選手：{row['選手名稱']}")
+                            st.rerun()
+            else:
+                # 一般民眾檢視表格
+                st.dataframe(df_reg[["編號", "選手名稱"]], use_container_width=True)
+        else:
+            st.info("目前尚未有選手報名。")
+
+        # 管理員抽籤與重置選項
         if is_admin:
             if len(df_reg) == 10 and (df_reg["編號"] == 0).all():
                 st.write("---")
@@ -291,13 +311,21 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                     st.rerun()
 
             st.write("---")
-            if st.button("🚨 初始化/重置 4 輪瑞士輪賽程", type="secondary"):
-                save_swiss_matches(None)
-                save_finals(None)
-                df_reg["編號"] = 0
-                save_registrations(df_reg)
-                st.warning("已重置抽籤與比賽數據。")
-                st.rerun()
+            col_reset1, col_reset2 = st.columns(2)
+            with col_reset1:
+                if st.button("🗑️ 一鍵清空所有報名名單", use_container_width=True):
+                    df_reg = pd.DataFrame(columns=["編號", "選手名稱"])
+                    save_registrations(df_reg)
+                    st.toast("已清空名單")
+                    st.rerun()
+            with col_reset2:
+                if st.button("🚨 初始化/重置所有對戰與抽籤", type="secondary", use_container_width=True):
+                    save_swiss_matches(None)
+                    save_finals(None)
+                    df_reg["編號"] = 0
+                    save_registrations(df_reg)
+                    st.warning("已重置抽籤與比賽數據。")
+                    st.rerun()
 
     player_map = dict(zip(df_reg["編號"], df_reg["選手名稱"])) if not df_reg.empty else {}
 
