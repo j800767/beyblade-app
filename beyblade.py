@@ -14,6 +14,7 @@ FINALS_FILE = "finals_matches.csv"               # 個人賽四強單淘汰檔�
 TEAM_DATA_FILE = "team_players_registration.csv" # 團體賽名單檔案 (5組)
 TEAM_MATCH_FILE = "team_round_robin_matches.csv" # 團體賽單循環賽程檔案 (10場)
 TEAM_FINALS_FILE = "team_finals_matches.csv"     # 團體冠亞賽檔案
+TEAM_TIE_FILE = "team_tiebreak_data.csv"        # 團體加賽結果記錄檔
 
 ADMIN_PASSWORD = "admin"  # 管理員預設密碼
 
@@ -99,6 +100,17 @@ def save_team_finals(df):
     elif os.path.exists(TEAM_FINALS_FILE):
         os.remove(TEAM_FINALS_FILE)
 
+def load_team_tiebreak():
+    if os.path.exists(TEAM_TIE_FILE):
+        return pd.read_csv(TEAM_TIE_FILE).fillna("")
+    return pd.DataFrame(columns=["加賽勝隊"])
+
+def save_team_tiebreak(df):
+    if df is not None:
+        df.to_csv(TEAM_TIE_FILE, index=False, encoding="utf-8-sig")
+    elif os.path.exists(TEAM_TIE_FILE):
+        os.remove(TEAM_TIE_FILE)
+
 # 載入初始資料
 df_reg = load_registrations()
 df_matches = load_matches()
@@ -106,6 +118,7 @@ df_finals = load_finals()
 df_teams = load_team_data()
 df_team_matches = load_team_matches()
 df_team_finals = load_team_finals()
+df_team_tiebreak = load_team_tiebreak()
 
 # ==========================================
 # 3. 側邊欄：權限與賽制切換
@@ -417,14 +430,13 @@ if main_mode == "個人賽 (10人瑞士輪+4強)":
             st.table(table_data)
 
 # ==========================================
-# 5. 模式二：雙人團體賽 (5組單循環預賽 ➡️ 取前2打冠亞賽)
+# 5. 模式二：雙人團體賽 (含加賽對戰邏輯)
 # ==========================================
 elif main_mode == "雙人團體賽 (5組循環+冠亞賽)":
     st.title("🤝 三重盃 雙人團體賽（5隊單循環預賽 ➡️ 冠亞軍決賽）")
     
     team_tabs = st.tabs(["📝 5組選手名單管理", "⚔️ 團體單循環對戰台", "📊 團體賽即時積分榜", "🏆 團體冠亞決賽"])
     
-    # --- 團體賽分頁 1：名單管理 ---
     with team_tabs[0]:
         st.markdown("### 📝 賽制說明：共 5 個組別（A~E），每組 2 位隊員。單循環預賽（10場）取前兩名打【冠亞決賽】！")
         st.write("---")
@@ -464,6 +476,7 @@ elif main_mode == "雙人團體賽 (5組循環+冠亞賽)":
                 save_team_data(pd.DataFrame(default_rows))
                 save_team_matches(None)
                 save_team_finals(None)
+                save_team_tiebreak(None)
                 st.error("💥 團體賽所有名單與戰績已完全清空！"); st.rerun()
 
     def get_team_members_str(team_code):
@@ -471,9 +484,11 @@ elif main_mode == "雙人團體賽 (5組循環+冠亞賽)":
         members_clean = [m for m in members if str(m).strip()]
         return f"({ ' ＆ '.join(members_clean) })" if members_clean else "(未登記)"
 
-    # 計算團體預賽排名的核心輔助函式
+    # 計算預賽基礎勝負、對戰關係與同分加賽判定
     def get_team_standings():
         team_stats = {t: {"wins": 0, "losses": 0} for t in TEAM_NAMES}
+        h2h_matrix = {t1: {t2: None for t2 in TEAM_NAMES} for t1 in TEAM_NAMES}
+
         if df_team_matches is not None and not df_team_matches.empty:
             for _, r in df_team_matches.iterrows():
                 w = r["勝組"]
@@ -482,10 +497,55 @@ elif main_mode == "雙人團體賽 (5組循環+冠亞賽)":
                     team_stats[w]["wins"] += 1
                     l = tB if w == tA else tA
                     team_stats[l]["losses"] += 1
-        sorted_teams = sorted(TEAM_NAMES, key=lambda t: (team_stats[t]["wins"], -team_stats[t]["losses"]), reverse=True)
-        return team_stats, sorted_teams
+                    h2h_matrix[tA][tB] = w
+                    h2h_matrix[tB][tA] = w
 
-    # --- 團體賽分頁 2：對戰台 ---
+        # 基礎排序 (勝場高者在前)
+        sorted_teams = sorted(TEAM_NAMES, key=lambda t: (team_stats[t]["wins"], -team_stats[t]["losses"]), reverse=True)
+        
+        # 檢查平手與戰績互咬狀況 (特別關心第2名與第3名之間是否有同勝負)
+        tied_groups = {}
+        for t in TEAM_NAMES:
+            w_cnt = team_stats[t]["wins"]
+            tied_groups.setdefault(w_cnt, []).append(t)
+
+        needs_tiebreak = False
+        tied_teams_for_spot = []
+
+        completed_cnt = sum(1 for w in df_team_matches["勝組"] if w != "尚未決定") if df_team_matches is not None else 0
+        if completed_cnt == 10:
+            rank2_team = sorted_teams[1]
+            rank3_team = sorted_teams[2]
+            # 如果第 2 名與第 3 名勝場相同，代表預賽同戰績衝撞
+            if team_stats[rank2_team]["wins"] == team_stats[rank3_team]["wins"]:
+                same_win_cnt = team_stats[rank2_team]["wins"]
+                tied_teams_for_spot = tied_groups[same_win_cnt]
+                
+                # 檢查這幾隊之間的 H2H 狀況
+                if len(tied_teams_for_spot) == 2:
+                    t1, t2 = tied_teams_for_spot[0], tied_teams_for_spot[1]
+                    # 兩隊同分：直得看兩隊對戰勝者
+                    h2h_winner = h2h_matrix[t1][t2]
+                    if h2h_winner:
+                        # 將 H2H 勝者排在前面
+                        loser = t2 if h2h_winner == t1 else t1
+                        sorted_teams.remove(h2h_winner)
+                        sorted_teams.remove(loser)
+                        sorted_teams.insert(1, h2h_winner)
+                        sorted_teams.insert(2, loser)
+                elif len(tied_teams_for_spot) >= 3:
+                    # 3隊以上同分互咬 ➡️ 需進行加賽
+                    needs_tiebreak = True
+
+        # 若已經登記加賽勝隊，強制將該隊提升為第 2 名
+        if not df_team_tiebreak.empty and "加賽勝隊" in df_team_tiebreak.columns:
+            tie_winner = df_team_tiebreak.iloc[0]["加賽勝隊"]
+            if tie_winner in sorted_teams:
+                sorted_teams.remove(tie_winner)
+                sorted_teams.insert(1, tie_winner) # 插在第 2 名晉級位
+
+        return team_stats, sorted_teams, needs_tiebreak, tied_teams_for_spot
+
     with team_tabs[1]:
         st.header("⚔️ 5 隊預賽對戰控制台 (共 10 場)")
 
@@ -538,15 +598,35 @@ elif main_mode == "雙人團體賽 (5組循環+冠亞賽)":
                 grid_data.append(row_dict)
             st.dataframe(pd.DataFrame(grid_data), use_container_width=True, hide_index=True)
 
-    # --- 團體賽分頁 3：積分榜 ---
     with team_tabs[2]:
         st.header("📊 團體預賽即時戰績積分榜")
-        st.caption("💡 前兩名將自動晉級【團體冠亞決賽】！")
+        st.caption("💡 排名機制：勝場 ➡️ 直接對戰 ➡️ 平手加賽 (Tie-breaker)。前兩名晉級【團體冠亞決賽】！")
 
         if df_team_matches is None or df_team_matches.empty:
             st.info("尚無團體賽數據。")
         else:
-            team_stats, sorted_teams = get_team_standings()
+            team_stats, sorted_teams, needs_tiebreak, tied_teams_for_spot = get_team_standings()
+            
+            # --- 平手加賽警示與控制台 ---
+            if needs_tiebreak or not df_team_tiebreak.empty:
+                st.write("---")
+                st.warning(f"⚠️ **偵測到預賽平手互咬！** 衝撞隊伍：`{', '.join(tied_teams_for_spot)}` 戰績相同且無法靠直接對戰區分，需進行【現場 1 局加賽】決定最後晉級席位！")
+                
+                if is_admin:
+                    st.subheader("⚡ 團體賽加賽結果登記控制台")
+                    selected_tie_winner = st.selectbox("請選擇加賽最終勝出隊伍（將晉級第 2 名席位）：", ["請選擇"] + tied_teams_for_spot)
+                    if st.button("🏆 儲存加賽結果", type="primary", use_container_width=True):
+                        if selected_tie_winner != "請選擇":
+                            save_team_tiebreak(pd.DataFrame([{"加賽勝隊": selected_tie_winner}]))
+                            st.success(f"🎉 已成功登記！【{selected_tie_winner}】獲得加賽勝利並晉級冠亞賽！"); st.rerun()
+                
+                if not df_team_tiebreak.empty:
+                    saved_winner = df_team_tiebreak.iloc[0]["加賽勝隊"]
+                    st.success(f"✅ 加賽紀錄：由 **{saved_winner}** 在加賽中勝出，成功取得最後 1 席冠亞賽門票！")
+                    if is_admin and st.button("🔄 清除加賽結果紀錄", type="secondary"):
+                        save_team_tiebreak(None); st.rerun()
+                st.write("---")
+
             table_t_data = []
             for rank, t_code in enumerate(sorted_teams, 1):
                 w = team_stats[t_code]["wins"]
@@ -565,19 +645,21 @@ elif main_mode == "雙人團體賽 (5組循環+冠亞賽)":
                 })
             st.table(table_t_data)
 
-    # --- 團體賽分頁 4：冠亞軍決賽 ---
     with team_tabs[3]:
         st.header("🏆 雙人團體賽：冠亞軍決賽")
         completed_t_count = sum(1 for w in df_team_matches["勝組"] if w != "尚未決定") if df_team_matches is not None else 0
 
+        team_stats, sorted_teams, needs_tiebreak, tied_teams_for_spot = get_team_standings()
+
         if completed_t_count < 10:
             st.warning(f"⏳ 團體預賽尚未打完（目前完成 {completed_t_count}/10 場），預賽全數比完後將自動開啟冠亞賽！")
+        elif needs_tiebreak and df_team_tiebreak.empty:
+            st.error("🚨 預賽出現多隊平手互咬！請先至「📊 團體賽即時積分榜」完成【平手加賽結果登記】後即可開啟冠亞賽。")
         else:
-            _, sorted_teams = get_team_standings()
             team_rank1, team_rank2 = sorted_teams[0], sorted_teams[1]
 
             if df_team_finals is None:
-                st.success(f"🎉 團體預賽全部完成！晉級冠亞賽隊伍已鎖定：\n\n* 🥇 **預賽第 1 名**：{team_rank1} {get_team_members_str(team_rank1)}\n* 🥈 **預賽第 2 名**：{team_rank2} {get_team_members_str(team_rank2)}")
+                st.success(f"🎉 團體預賽與加賽全部完成！晉級冠亞賽隊伍已鎖定：\n\n* 🥇 **預賽第 1 名**：{team_rank1} {get_team_members_str(team_rank1)}\n* 🥈 **預賽第 2 名**：{team_rank2} {get_team_members_str(team_rank2)}")
                 if is_admin and st.button("🔥 開啟團體冠亞軍決賽對戰台", type="primary", use_container_width=True):
                     df_tf = pd.DataFrame([{"隊伍1": team_rank1, "隊伍2": team_rank2, "冠軍": "尚未決定", "亞軍": "尚未決定"}])
                     save_team_finals(df_tf); st.rerun()
