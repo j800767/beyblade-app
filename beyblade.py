@@ -176,10 +176,25 @@ def generate_next_round_pairs(current_round):
             if not found:
                 i += 1
 
+    # 🛠️ 修正 1：防止重複對戰 Bug
+    # 若跨組比對後仍留有 pool 選手，優先尋找尚未對戰過的對手進行配對
     while len(pool) >= 2:
-        p1 = pool.pop(0)
-        p2 = pool.pop(0)
-        new_pairs.append((p1, p2))
+        i = 0
+        p1 = pool[i]
+        found = False
+        for j in range(1, len(pool)):
+            p2 = pool[j]
+            if tuple(sorted([p1, p2])) not in played_pairs:
+                new_pairs.append((p1, p2))
+                pool.pop(j)
+                pool.pop(i)
+                found = True
+                break
+        if not found:
+            # 極端情況（如歷史對戰已卡死），強迫彈出配對
+            p1 = pool.pop(0)
+            p2 = pool.pop(0)
+            new_pairs.append((p1, p2))
 
     match_data = []
     for p1, p2 in new_pairs:
@@ -399,15 +414,26 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
         else:
             wins, losses, sos, h2h, _, ranked_ids, sort_key = calculate_swiss_standings()
             
-            # 檢查第 4 名與第 5 名是否同勝場且對戰互咬/未對戰
+            # 🛠️ 修正 2：嚴格破平與 PK 名單過濾 Bug
+            # 檢查 ranked_ids[3]（目前排序第 4 名）與 ranked_ids[4]（第 5 名）
             rank4_id = ranked_ids[3]
             rank5_id = ranked_ids[4]
-            is_wins_tied = (wins[rank4_id] == wins[rank5_id])
-            h2h_tied = (h2h.get((rank4_id, rank5_id)) is None or sort_key(rank4_id)[1] == sort_key(rank5_id)[1])
             
-            if is_wins_tied and h2h_tied and "selected_4th" not in st.session_state:
-                tied_candidates = [p for p in ranked_ids if wins[p] == wins[rank4_id]]
-                st.error(f"⚠️ 偵測到第 4 名晉級點存在同分/對戰互咬爭議！同勝場選手：{', '.join([f'{p}號 {player_map[p]}' for p in tied_candidates])}")
+            # 若勝場相同、H2H 分數相同、且 SOS 完全相同，才觸發加賽爭議
+            is_wins_tied = (wins[rank4_id] == wins[rank5_id])
+            h2h_tied = (sort_key(rank4_id)[1] == sort_key(rank5_id)[1])
+            sos_tied = (sos[rank4_id] == sos[rank5_id])
+            
+            if is_wins_tied and h2h_tied and sos_tied and "selected_4th" not in st.session_state:
+                # 僅篩選與第 4 名同勝場且同 SOS 的高分選手進行 PK，自動剔除 SOS 較低的選手（如飯糰）
+                target_wins = wins[rank4_id]
+                target_sos = sos[rank4_id]
+                tied_candidates = [
+                    p for p in ranked_ids 
+                    if wins[p] == target_wins and sos[p] == target_sos
+                ]
+                
+                st.error(f"⚠️ 偵測到第 4 名晉級點存在勝場與 SOS 完全同分爭議！同分選手：{', '.join([f'{p}號 {player_map[p]}' for p in tied_candidates])}")
                 st.info("請現場進行【一分定勝負 PK 加賽】，並由管理員指定最終晉級四強的第 4 名選手：")
                 
                 if is_admin:
