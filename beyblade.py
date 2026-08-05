@@ -133,7 +133,7 @@ def calculate_swiss_standings():
     # 第三順位：對手強度分 (SOS / Buchholz) = 你擊敗過的對手之總勝場和
     sos = {p_id: sum(wins[opp] for opp in defeated_opponents[p_id]) for p_id in range(1, 11)}
 
-    def sort_key(p_id):
+  def sort_key(p_id):
         w_cnt = wins[p_id]      # 第一順位：總勝場數
         s_score = sos[p_id]     # 第三順位：對手強度分 (SOS)
         
@@ -142,6 +142,8 @@ def calculate_swiss_standings():
             1 for other in range(1, 11)
             if other != p_id and wins[other] == w_cnt and h2h.get((p_id, other)) == p_id
         )
+        
+        # 確保順序為：勝場數 ➡️ 對戰成績(H2H) ➡️ SOS強度
         return (w_cnt, h2h_score, s_score)
 
     ranked_ids = sorted(range(1, 11), key=sort_key, reverse=True)
