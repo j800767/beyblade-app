@@ -133,7 +133,8 @@ main_mode = st.sidebar.radio("選擇要管理的賽制：", ["個人賽 (10人�
 if main_mode == "個人賽 (10人單循環+4強)":
     st.title("💥 三重盃 個人賽（10人單循環預賽 ➡️ 4強淘汰賽）")
     
-    tabs = st.tabs(["📝 選手報名與抽籤", "⚔️ 預賽：單循環控制台", "🏆 決賽：四強單淘汰", "📊 即時積分榜"])
+    # 增加「🗓️ 預賽賽程總覽」分頁
+    tabs = st.tabs(["📝 選手報名與抽籤", "⚔️ 預賽：單循環控制台", "🗓️ 預賽賽程總覽", "🏆 決賽：四強單淘汰", "📊 即時積分榜"])
     
     # --- Tab 1: 選手名單管理 ---
     with tabs[0]:
@@ -175,7 +176,6 @@ if main_mode == "個人賽 (10人單循環+4強)":
                     df_reg["編號"] = nums
                     save_registrations(df_reg)
                     
-                    # 初始化 45 場對戰紀錄
                     matches_init = []
                     for idx, (p1_id, p2_id) in enumerate(SCHEDULE_45, 1):
                         matches_init.append({
@@ -210,7 +210,6 @@ if main_mode == "個人賽 (10人單循環+4強)":
                 st.error("💥 個人賽所有名單與戰績已完全清空！")
                 st.rerun()
 
-    # 取得編號對照字典
     player_map = dict(zip(df_reg["編號"], df_reg["選手名稱"])) if not df_reg.empty else {}
 
     # --- Tab 2: 10人單循環賽程控制台 ---
@@ -252,9 +251,71 @@ if main_mode == "個人賽 (10人單循環+4強)":
                 w_str = player_map.get(current_winner_id, "尚未決定") if current_winner_id != 0 else "尚未比賽"
                 st.write(f"**當前比賽結果**：`{w_str}`")
 
-    # ==========================================
+    # --- Tab 3: 新增 - 預賽賽程總覽 ---
+    with tabs[2]:
+        st.header("🗓️ 預賽賽程總覽")
+        if df_matches is None or (df_reg["編號"] == 0).all():
+            st.info("尚無賽程數據（需先完成選手盲抽編號）。")
+        else:
+            view_mode = st.radio("選擇檢視方式：", ["交叉對戰矩陣表", "完整 45 場對戰清單"], horizontal=True)
+            
+            if view_mode == "交叉對戰矩陣表":
+                st.caption("💡 矩陣表說明：單循環對戰圖。顯示勝者名稱，`VS` 代表未比賽，`---` 代表同選手。")
+                
+                # 建立 10x10 對戰對照表
+                match_results = {}
+                for _, row in df_matches.iterrows():
+                    p1, p2, w = int(row["選手A_編號"]), int(row["選手B_編號"]), int(row["勝者_編號"])
+                    match_results[(p1, p2)] = w
+                    match_results[(p2, p1)] = w
+
+                grid_data = []
+                player_labels = [f"{p_id}號 {player_map.get(p_id, '')}" for p_id in range(1, 11)]
+
+                for row_id in range(1, 11):
+                    row_dict = {"選手": f"{row_id}號 {player_map.get(row_id, '')}"}
+                    for col_id in range(1, 11):
+                        col_label = f"{col_id}號"
+                        if row_id == col_id:
+                            row_dict[col_label] = "---"
+                        else:
+                            w_id = match_results.get((row_id, col_id), 0)
+                            if w_id == 0:
+                                row_dict[col_label] = "VS"
+                            else:
+                                row_dict[col_label] = f"🏆 {player_map.get(w_id, f'{w_id}號')}"
+                    grid_data.append(row_dict)
+
+                df_grid = pd.DataFrame(grid_data)
+                st.dataframe(df_grid, use_container_width=True, hide_index=True)
+
+            else:
+                st.caption("💡 清單模式：按比賽順序列出 45 場賽程。")
+                schedule_list = []
+                for _, row in df_matches.iterrows():
+                    m_idx = int(row["場次"])
+                    p1_id, p2_id, w_id = int(row["選手A_編號"]), int(row["選手B_編號"]), int(row["勝者_編號"])
+                    
+                    p1_str = f"{p1_id}號 {player_map.get(p1_id, '')}"
+                    p2_str = f"{p2_id}號 {player_map.get(p2_id, '')}"
+                    
+                    if w_id == 0:
+                        status = "⏳ 待比賽"
+                        w_str = "未進行"
+                    else:
+                        status = "✅ 已完成"
+                        w_str = f"🏆 {p1_str}" if w_id == p1_id else f"🏆 {p2_str}"
+
+                    schedule_list.append({
+                        "場次": f"第 {m_idx} 場",
+                        "選手 A (紅)": p1_str,
+                        "選手 B (藍)": p2_str,
+                        "比賽狀態": status,
+                        "獲勝者": w_str
+                    })
+                st.dataframe(pd.DataFrame(schedule_list), use_container_width=True, hide_index=True)
+
     # 進階戰績與同分破局計算
-    # ==========================================
     def calculate_standings():
         wins_dict = {p_id: 0 for p_id in range(1, 11)}
         losses_dict = {p_id: 0 for p_id in range(1, 11)}
@@ -290,8 +351,8 @@ if main_mode == "個人賽 (10人單循環+4強)":
         ranked_ids = sorted(range(1, 11), key=sort_key, reverse=True)
         return wins_dict, losses_dict, sos_dict, h2h, ranked_ids, sort_key
 
-    # --- Tab 3: 四強決賽 ---
-    with tabs[2]:
+    # --- Tab 4: 四強決賽 ---
+    with tabs[3]:
         st.header("🏆 決賽：四強單淘汰控制台")
         completed_count = sum(1 for w in df_matches["勝者_編號"] if w != 0) if df_matches is not None else 0
         
@@ -369,8 +430,8 @@ if main_mode == "個人賽 (10人單循環+4強)":
                     st.balloons()
                     st.markdown(f"### 🎖️ 三重盃 榮譽殿堂\n* 🥇 **冠軍**：{final_m['勝者']}\n* 🥈 **亞軍**：{final_m['敗者']}\n* 🥉 **季軍**：{place3['勝者']}")
 
-    # --- Tab 4: 排行榜 ---
-    with tabs[3]:
+    # --- Tab 5: 排行榜 ---
+    with tabs[4]:
         st.header("📊 預賽即時戰績積分榜")
         st.caption("💡 排名優先順序：1. 總勝場 ➡️ 2. 對戰勝負 (Head-to-Head) ➡️ 3. 戰績強度 (擊敗對手的總勝場數)")
         
