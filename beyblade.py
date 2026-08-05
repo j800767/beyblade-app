@@ -381,7 +381,8 @@ if main_mode == "個人賽 (10人瑞士輪+4強)":
                         resA = st.selectbox("回報準決賽 A 勝者", ["選擇", semiA['選手1'], semiA['選手2']], key="semiA_s")
                         if resA != "選擇":
                             lossA = semiA['選手2'] if resA == semiA['選手1'] else semiA['選手1']
-                            df_finals.loc[df_finals["階段"] == "準決賽A", ["勝者", "敗者"]] = [resA, lossA]
+                            df_finals.loc[df_finals["階段"] == "準決賽A", "勝者"] = resA
+                            df_finals.loc[df_finals["階段"] == "準決賽A", "敗者"] = lossA
                             df_finals.loc[df_finals["階段"] == "冠軍賽", "選手1"] = resA
                             df_finals.loc[df_finals["階段"] == "季軍賽", "選手1"] = lossA
                             save_finals(df_finals); st.rerun()
