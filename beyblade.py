@@ -107,7 +107,7 @@ df_team_matches = load_team_matches()
 df_team_finals = load_team_finals()
 
 # ==========================================
-# 3. 瑞士輪演算法
+# 3. 瑞士輪演算與三階破平機制 (Tie-breakers)
 # ==========================================
 def calculate_swiss_standings():
     wins = {p_id: 0 for p_id in range(1, 11)}
@@ -130,11 +130,14 @@ def calculate_swiss_standings():
                 h2h[(p1, p2)] = w
                 h2h[(p2, p1)] = w
     
+    # 第三順位：對手強度分 (SOS / Buchholz) = 你擊敗過的對手之總勝場和
     sos = {p_id: sum(wins[opp] for opp in defeated_opponents[p_id]) for p_id in range(1, 11)}
 
     def sort_key(p_id):
-        w_cnt = wins[p_id]
-        s_score = sos[p_id]
+        w_cnt = wins[p_id]      # 第一順位：總勝場數
+        s_score = sos[p_id]     # 第三順位：對手強度分 (SOS)
+        
+        # 第二順位：直接對戰成績 (Head-to-Head)
         h2h_score = sum(
             1 for other in range(1, 11)
             if other != p_id and wins[other] == w_cnt and h2h.get((p_id, other)) == p_id
@@ -209,7 +212,7 @@ if st.session_state["is_admin"]:
     if admin_input == ADMIN_PASSWORD:
         st.sidebar.success("🔓 管理員已授權")
     else:
-        st.sidebar.info("" )
+        st.sidebar.info("💡 預設密碼為: admin")
 
 is_admin = st.session_state["is_admin"]
 
@@ -238,7 +241,6 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
     with tab1:
         st.header("📝 選手報名與抽籤初始化")
         
-        # 管理員新增區塊
         if is_admin:
             with st.form("reg_form", clear_on_submit=True):
                 col_name, col_btn = st.columns([3, 1])
@@ -264,10 +266,8 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
 
         st.subheader(f"👥 已報名選手名單 (共 {len(df_reg)} / 10 人)")
 
-        # 顯示列表與單一選手刪除功能
         if not df_reg.empty:
             if is_admin:
-                # 管理員模式：逐筆顯示，後方附帶刪除按鈕
                 for idx, row in df_reg.iterrows():
                     col_info, col_del = st.columns([4, 1])
                     with col_info:
@@ -280,12 +280,10 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                             st.toast(f"已刪除選手：{row['選手名稱']}")
                             st.rerun()
             else:
-                # 一般民眾檢視表格
                 st.dataframe(df_reg[["編號", "選手名稱"]], use_container_width=True)
         else:
             st.info("目前尚未有選手報名。")
 
-        # 管理員抽籤與重置選項
         if is_admin:
             if len(df_reg) == 10 and (df_reg["編號"] == 0).all():
                 st.write("---")
@@ -399,23 +397,54 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
         if df_swiss is None or total_p < 20:
             st.warning(f"⏳ 預賽尚未完成（已完成 {total_p}/20 場）")
         else:
-            wins, losses, sos, h2h, _, ranked_ids, _ = calculate_swiss_standings()
-            r1, r2, r3, r4 = ranked_ids[:4]
-
-            if df_finals is None:
-                st.success("前 4 強名單已鎖定！")
-                if is_admin and st.button("🔥 生成 4 強決賽對戰表", type="primary"):
-                    finals_data = [
-                        {"階段": "準決賽A", "選手1": player_map[r1], "選手2": player_map[r4], "勝者": "尚未決定", "敗者": "尚未決定"},
-                        {"階段": "準決賽B", "選手1": player_map[r2], "選手2": player_map[r3], "勝者": "尚未決定", "敗者": "尚未決定"},
-                        {"階段": "季軍賽", "選手1": "準決賽A敗者", "選手2": "準決賽B敗者", "勝者": "尚未決定", "敗者": "尚未決定"},
-                        {"階段": "冠軍賽", "選手1": "準決賽A勝者", "選手2": "準決賽B勝者", "勝者": "尚未決定", "敗者": "尚未決定"}
-                    ]
-                    df_finals = pd.DataFrame(finals_data)
-                    save_finals(df_finals)
-                    st.rerun()
+            wins, losses, sos, h2h, _, ranked_ids, sort_key = calculate_swiss_standings()
+            
+            # 檢查第 4 名是否有完全平手的情況
+            rank4_id = ranked_ids[3]
+            tied_candidates = [p for p in ranked_ids if sort_key(p) == sort_key(rank4_id)]
+            
+            if len(tied_candidates) > 1 and "selected_4th" not in st.session_state:
+                st.error(f"⚠️ 偵測到第 4 名存在三階指標完全平手爭議！同分選手：{', '.join([f'{p}號 {player_map[p]}' for p in tied_candidates])}")
+                st.info("請現場進行加賽或抽籤，並由管理員指定最終晉級第 4 名的選手：")
+                
+                if is_admin:
+                    chosen_4th = st.selectbox(
+                        "選擇晉級四強的第 4 名選手：", 
+                        tied_candidates, 
+                        format_func=lambda x: f"{x}號 {player_map[x]}"
+                    )
+                    if st.button("確定第 4 名晉級者", type="primary"):
+                        st.session_state["selected_4th"] = chosen_4th
+                        st.rerun()
+                else:
+                    st.warning("等待管理員裁決平手同分者...")
+            
             else:
-                st.dataframe(df_finals, use_container_width=True)
+                final_4 = ranked_ids[:3]
+                if "selected_4th" in st.session_state:
+                    fourth_p = st.session_state["selected_4th"]
+                    if fourth_p in final_4:
+                        final_4.remove(fourth_p)
+                    final_4.append(fourth_p)
+                else:
+                    final_4.append(ranked_ids[3])
+
+                r1, r2, r3, r4 = final_4[0], final_4[1], final_4[2], final_4[3]
+
+                if df_finals is None:
+                    st.success(f"前 4 強名單：1️⃣{player_map[r1]}、2️⃣{player_map[r2]}、3️⃣{player_map[r3]}、4️⃣{player_map[r4]}")
+                    if is_admin and st.button("🔥 生成 4 強決賽對戰表", type="primary"):
+                        finals_data = [
+                            {"階段": "準決賽A", "選手1": player_map[r1], "選手2": player_map[r4], "勝者": "尚未決定", "敗者": "尚未決定"},
+                            {"階段": "準決賽B", "選手1": player_map[r2], "選手2": player_map[r3], "勝者": "尚未決定", "敗者": "尚未決定"},
+                            {"階段": "季軍賽", "選手1": "準決賽A敗者", "選手2": "準決賽B敗者", "勝者": "尚未決定", "敗者": "尚未決定"},
+                            {"階段": "冠軍賽", "選手1": "準決賽A勝者", "選手2": "準決賽B勝者", "勝者": "尚未決定", "敗者": "尚未決定"}
+                        ]
+                        df_finals = pd.DataFrame(finals_data)
+                        save_finals(df_finals)
+                        st.rerun()
+                else:
+                    st.dataframe(df_finals, use_container_width=True)
 
     # --- Tab 5: 積分榜 ---
     with tab5:
