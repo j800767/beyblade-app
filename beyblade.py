@@ -55,7 +55,6 @@ def save_swiss_matches(df):
 def load_finals():
     if os.path.exists(FINALS_FILE):
         df = pd.read_csv(FINALS_FILE).fillna("")
-        # 強制指定文字欄位型態，防止 TypeError
         for col in ["階段", "選手1", "選手2", "勝者", "敗者"]:
             if col in df.columns:
                 df[col] = df[col].astype(str)
@@ -358,7 +357,21 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
             r_matches = df_swiss[df_swiss["輪次"] == current_max_round]
             completed_r_count = sum(1 for w in r_matches["勝者_編號"] if w != 0)
             
-            st.info(f"### 📍 當前進行：第 {current_max_round} / 4 輪 (該輪進度：{completed_r_count} / 5 場)")
+            # --- 頂部提示欄與回退上一輪按鈕 ---
+            col_header, col_undo = st.columns([3, 1.2])
+            with col_header:
+                st.info(f"### 📍 當前進行：第 {current_max_round} / 4 輪 (該輪進度：{completed_r_count} / 5 場)")
+            with col_undo:
+                if is_admin and current_max_round > 1:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button(f"🔙 回復至第 {current_max_round - 1} 輪", type="secondary", use_container_width=True):
+                        # 移除最後一輪的資料
+                        df_swiss = df_swiss[df_swiss["輪次"] < current_max_round]
+                        save_swiss_matches(df_swiss)
+                        # 一併重置決賽檔案，防止狀態不一致
+                        save_finals(None)
+                        st.toast(f"已成功退回第 {current_max_round - 1} 輪！")
+                        st.rerun()
 
             for m_idx, row in r_matches.iterrows():
                 p1_id, p2_id, w_id = int(row["選手A_編號"]), int(row["選手B_編號"]), int(row["勝者_編號"])
