@@ -54,7 +54,12 @@ def save_swiss_matches(df):
 
 def load_finals():
     if os.path.exists(FINALS_FILE):
-        return pd.read_csv(FINALS_FILE).fillna("")
+        df = pd.read_csv(FINALS_FILE).fillna("")
+        # 強制指定文字欄位型態，防止 TypeError
+        for col in ["階段", "選手1", "選手2", "勝者", "敗者"]:
+            if col in df.columns:
+                df[col] = df[col].astype(str)
+        return df
     return None
 
 def save_finals(df):
@@ -89,7 +94,11 @@ def save_team_matches(df):
 
 def load_team_finals():
     if os.path.exists(TEAM_FINALS_FILE):
-        return pd.read_csv(TEAM_FINALS_FILE).fillna("")
+        df = pd.read_csv(TEAM_FINALS_FILE).fillna("")
+        for col in ["階段", "隊伍1", "隊伍2", "勝隊", "敗隊"]:
+            if col in df.columns:
+                df[col] = df[col].astype(str)
+        return df
     return None
 
 def save_team_finals(df):
@@ -130,7 +139,7 @@ def calculate_swiss_standings():
                 h2h[(p1, p2)] = w
                 h2h[(p2, p1)] = w
     
-    # 第三順位：對手強度分 (SOS / Buchholz) = 你擊敗過的對手之總勝場和
+    # 第三順位：對手強度分 (SOS / Buchholz)
     sos = {p_id: sum(wins[opp] for opp in defeated_opponents[p_id]) for p_id in range(1, 11)}
 
     def sort_key(p_id):
@@ -176,7 +185,6 @@ def generate_next_round_pairs(current_round):
             if not found:
                 i += 1
 
-    # 🛠️ 修正 1：防止重複對戰 Bug
     while len(pool) >= 2:
         i = 0
         p1 = pool[i]
@@ -465,19 +473,22 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                     df_finals = pd.DataFrame(finals_data)
                     save_finals(df_finals)
 
-                # 讀取準決賽結果
-                sf_a_w = str(df_finals.loc[df_finals["階段"] == "準決賽A", "勝者"].values[0]) if not df_finals.loc[df_finals["階段"] == "準決賽A", "勝者"].empty else ""
-                sf_a_l = str(df_finals.loc[df_finals["階段"] == "準決賽A", "敗者"].values[0]) if not df_finals.loc[df_finals["階段"] == "準決賽A", "敗者"].empty else ""
-                sf_b_w = str(df_finals.loc[df_finals["階段"] == "準決賽B", "勝者"].values[0]) if not df_finals.loc[df_finals["階段"] == "準決賽B", "勝者"].empty else ""
-                sf_b_l = str(df_finals.loc[df_finals["階段"] == "準決賽B", "敗者"].values[0]) if not df_finals.loc[df_finals["階段"] == "準決賽B", "敗者"].empty else ""
+                # 強制轉換欄位型態，防止 TypeError
+                for col in ["階段", "選手1", "選手2", "勝者", "敗者"]:
+                    df_finals[col] = df_finals[col].astype(str)
 
-                # 🛠️ 修正 2：確保型態轉換為 str 以防 PyArrow 拋出 TypeError 錯誤
+                # 讀取準決賽結果
+                sf_a_w = df_finals.loc[df_finals["階段"] == "準決賽A", "勝者"].values[0] if not df_finals.loc[df_finals["階段"] == "準決賽A", "勝者"].empty else ""
+                sf_a_l = df_finals.loc[df_finals["階段"] == "準決賽A", "敗者"].values[0] if not df_finals.loc[df_finals["階段"] == "準決賽A", "敗者"].empty else ""
+                sf_b_w = df_finals.loc[df_finals["階段"] == "準決賽B", "勝者"].values[0] if not df_finals.loc[df_finals["階段"] == "準決賽B", "勝者"].empty else ""
+                sf_b_l = df_finals.loc[df_finals["階段"] == "準決賽B", "敗者"].values[0] if not df_finals.loc[df_finals["階段"] == "準決賽B", "敗者"].empty else ""
+
                 updated_flag = False
-                if sf_a_l and sf_b_l:
+                if sf_a_l and sf_b_l and sf_a_l != "" and sf_b_l != "":
                     df_finals.loc[df_finals["階段"] == "季軍賽", "選手1"] = str(sf_a_l)
                     df_finals.loc[df_finals["階段"] == "季軍賽", "選手2"] = str(sf_b_l)
                     updated_flag = True
-                if sf_a_w and sf_b_w:
+                if sf_a_w and sf_b_w and sf_a_w != "" and sf_b_w != "":
                     df_finals.loc[df_finals["階段"] == "冠軍賽", "選手1"] = str(sf_a_w)
                     df_finals.loc[df_finals["階段"] == "冠軍賽", "選手2"] = str(sf_b_w)
                     updated_flag = True
@@ -528,7 +539,6 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                 st.subheader("🥇 2. 總決賽 (Finals)")
                 col_3rd, col_1st = st.columns(2)
 
-                # 讀取決賽結果
                 p3_1 = str(df_finals.loc[df_finals["階段"] == "季軍賽", "選手1"].values[0])
                 p3_2 = str(df_finals.loc[df_finals["階段"] == "季軍賽", "選手2"].values[0])
                 p3_w = str(df_finals.loc[df_finals["階段"] == "季軍賽", "勝者"].values[0])
@@ -576,7 +586,7 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                         st.info("⏳ 等待準決賽兩場結果出爐...")
 
                 # --- 3. 頒獎台 / 最終名次榜 ---
-                if p1_w and p3_w:
+                if p1_w and p3_w and p1_w != "" and p3_w != "":
                     st.write("---")
                     st.balloons()
                     st.subheader("🎉 個人賽最終前 4 強名單")
@@ -624,7 +634,6 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
         "📊 團體積分榜"
     ])
     
-    # 建立隊伍名稱與隊員的 Map
     team_player_map = {}
     for team in TEAM_NAMES:
         p1_row = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 1")]
@@ -657,7 +666,6 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
             df_teams = pd.DataFrame(new_rows)
             save_team_data(df_teams)
             
-            # 初始化正統 10 場單循環賽程
             t_matches = []
             for idx, (t1, t2) in enumerate(TEAM_SCHEDULE_10, 1):
                 t_matches.append({"場次": idx, "隊伍A": t1, "隊伍B": t2, "勝隊": "尚未決定"})
@@ -716,7 +724,6 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
                 })
             st.dataframe(pd.DataFrame(disp_tm), use_container_width=True, hide_index=True)
 
-    # 團體戰績與破平計算邏輯
     def calculate_team_standings():
         t_wins = {t: 0 for t in TEAM_NAMES}
         t_losses = {t: 0 for t in TEAM_NAMES}
@@ -787,6 +794,9 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
                     finals_tf = pd.DataFrame([{"階段": "冠亞軍決賽", "隊伍1": t1_top, "隊伍2": t2_top, "勝隊": "尚未決定", "敗隊": "尚未決定"}])
                     save_team_finals(finals_tf)
                     df_team_finals = finals_tf
+
+                for col in ["階段", "隊伍1", "隊伍2", "勝隊", "敗隊"]:
+                    df_team_finals[col] = df_team_finals[col].astype(str)
 
                 curr_tf_w = str(df_team_finals.loc[0, "勝隊"])
                 
