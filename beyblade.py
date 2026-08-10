@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import random
+from functools import cmp_to_key
 
 # ==========================================
 # 1. 基礎設定與檔案路徑
@@ -115,7 +116,7 @@ df_team_matches = load_team_matches()
 df_team_finals = load_team_finals()
 
 # ==========================================
-# 3. 瑞士輪演算與三階破平機制 (Tie-breakers)
+# 3. 瑞士輪演算與正確 H2H 機制
 # ==========================================
 def calculate_swiss_standings():
     wins = {p_id: 0 for p_id in range(1, 11)}
@@ -138,22 +139,30 @@ def calculate_swiss_standings():
                 h2h[(p1, p2)] = w
                 h2h[(p2, p1)] = w
     
-    # 第三順位：對手強度分 (SOS / Buchholz)
+    # 對手強度分 (SOS / Buchholz)
     sos = {p_id: sum(wins[opp] for opp in defeated_opponents[p_id]) for p_id in range(1, 11)}
 
-    def sort_key(p_id):
-        w_cnt = wins[p_id]      # 第一順位：總勝場數
-        s_score = sos[p_id]     # 第三順位：對手強度分 (SOS)
+    # 正確的 H2H + 勝場 + SOS 比較器
+    def compare_players(p1, p2):
+        # 1. 第一順位：總勝場數
+        if wins[p1] != wins[p2]:
+            return 1 if wins[p1] > wins[p2] else -1
         
-        # 第二順位：直接對戰成績 (Head-to-Head)
-        h2h_score = sum(
-            1 for other in range(1, 11)
-            if other != p_id and wins[other] == w_cnt and h2h.get((p_id, other)) == p_id
-        )
-        return (w_cnt, h2h_score, s_score)
+        # 2. 第二順位：直接對戰勝負 (Head-to-Head)
+        winner = h2h.get((p1, p2))
+        if winner == p1:
+            return 1
+        elif winner == p2:
+            return -1
+        
+        # 3. 第三順位：對手強度分 (SOS)
+        if sos[p1] != sos[p2]:
+            return 1 if sos[p1] > sos[p2] else -1
+            
+        return 0
 
-    ranked_ids = sorted(range(1, 11), key=sort_key, reverse=True)
-    return wins, losses, sos, h2h, played_pairs, ranked_ids, sort_key
+    ranked_ids = sorted(range(1, 11), key=cmp_to_key(compare_players), reverse=True)
+    return wins, losses, sos, h2h, played_pairs, ranked_ids, cmp_to_key(compare_players)
 
 def generate_next_round_pairs(current_round):
     wins, losses, _, _, played_pairs, ranked_ids, _ = calculate_swiss_standings()
@@ -357,7 +366,6 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
             r_matches = df_swiss[df_swiss["輪次"] == current_max_round]
             completed_r_count = sum(1 for w in r_matches["勝者_編號"] if w != 0)
             
-            # --- 頂部提示欄與回退上一輪按鈕 ---
             col_header, col_undo = st.columns([3, 1.2])
             with col_header:
                 st.info(f"### 📍 當前進行：第 {current_max_round} / 4 輪 (該輪進度：{completed_r_count} / 5 場)")
@@ -365,10 +373,8 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                 if is_admin and current_max_round > 1:
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.button(f"🔙 回復至第 {current_max_round - 1} 輪", type="secondary", use_container_width=True):
-                        # 移除最後一輪的資料
                         df_swiss = df_swiss[df_swiss["輪次"] < current_max_round]
                         save_swiss_matches(df_swiss)
-                        # 一併重置決賽檔案，防止狀態不一致
                         save_finals(None)
                         st.toast(f"已成功退回第 {current_max_round - 1} 輪！")
                         st.rerun()
@@ -437,10 +443,9 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
             rank5_id = ranked_ids[4]
             
             is_wins_tied = (wins[rank4_id] == wins[rank5_id])
-            h2h_tied = (sort_key(rank4_id)[1] == sort_key(rank5_id)[1])
-            sos_tied = (sos[rank4_id] == sos[rank5_id])
             
-            if is_wins_tied and h2h_tied and sos_tied and "selected_4th" not in st.session_state:
+            # 檢查排序後若勝場同分且 H2H 平手、SOS 也相同時才跳出加賽
+            if is_wins_tied and sos[rank4_id] == sos[rank5_id] and "selected_4th" not in st.session_state:
                 target_wins = wins[rank4_id]
                 target_sos = sos[rank4_id]
                 tied_candidates = [
@@ -475,7 +480,6 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
 
                 r1, r2, r3, r4 = final_4[0], final_4[1], final_4[2], final_4[3]
 
-                # 初始化決賽資料
                 if df_finals is None:
                     finals_data = [
                         {"階段": "準決賽A", "選手1": str(player_map[r1]), "選手2": str(player_map[r4]), "勝者": "", "敗者": ""},
@@ -486,11 +490,9 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                     df_finals = pd.DataFrame(finals_data)
                     save_finals(df_finals)
 
-                # 強制轉換欄位型態，防止 TypeError
                 for col in ["階段", "選手1", "選手2", "勝者", "敗者"]:
                     df_finals[col] = df_finals[col].astype(str)
 
-                # 讀取準決賽結果
                 sf_a_w = df_finals.loc[df_finals["階段"] == "準決賽A", "勝者"].values[0] if not df_finals.loc[df_finals["階段"] == "準決賽A", "勝者"].empty else ""
                 sf_a_l = df_finals.loc[df_finals["階段"] == "準決賽A", "敗者"].values[0] if not df_finals.loc[df_finals["階段"] == "準決賽A", "敗者"].empty else ""
                 sf_b_w = df_finals.loc[df_finals["階段"] == "準決賽B", "勝者"].values[0] if not df_finals.loc[df_finals["階段"] == "準決賽B", "勝者"].empty else ""
@@ -508,7 +510,6 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                 if updated_flag:
                     save_finals(df_finals)
 
-                # --- 1. 準決賽控制區 ---
                 st.subheader("🥊 1. 準決賽 (Semi-Finals)")
                 col_sfa, col_sfb = st.columns(2)
 
@@ -548,7 +549,6 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
 
                 st.write("---")
 
-                # --- 2. 決賽控制區 (季軍賽 & 冠軍賽) ---
                 st.subheader("🥇 2. 總決賽 (Finals)")
                 col_3rd, col_1st = st.columns(2)
 
@@ -598,7 +598,6 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                     else:
                         st.info("⏳ 等待準決賽兩場結果出爐...")
 
-                # --- 3. 頒獎台 / 最終名次榜 ---
                 if p1_w and p3_w and p1_w != "" and p3_w != "":
                     st.write("---")
                     st.balloons()
