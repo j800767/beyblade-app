@@ -277,7 +277,7 @@ def render_pk_section(rank_target, candidates, player_map):
             st.warning("等待管理員進行 PK 加賽裁決...")
 
     elif num_c == 3:
-        st.markdown("1. 盲抽 1 人輪空。<br>2. 另外兩人打 1 場 $\rightarrow$ 勝者與輪空者打 PK 決賽！", unsafe_allow_html=True)
+        st.markdown("1. 盲抽 1 人輪空。<br>2. 另外兩人打 1 場 加賽 勝者與輪空者打 PK 決賽！", unsafe_allow_html=True)
         if is_admin:
             col_p1, col_p2 = st.columns(2)
             with col_p1:
