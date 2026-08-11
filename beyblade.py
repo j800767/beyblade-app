@@ -171,7 +171,7 @@ def generate_next_round_pairs(current_round):
     return match_data
 
 # ==========================================
-# 3. 團體賽資料存取與計算
+# 3. 團體賽資料存取與簡化計算 (僅看勝場與H2H)
 # ==========================================
 def load_team_players():
     if os.path.exists(TEAM_DATA_FILE):
@@ -210,14 +210,11 @@ df_team_f = load_team_finals()
 def calculate_team_standings():
     t_wins = {t: 0 for t in TEAM_NAMES}
     t_losses = {t: 0 for t in TEAM_NAMES}
-    t_pts_for = {t: 0 for t in TEAM_NAMES}      # 總得分 (小局勝場)
-    t_pts_against = {t: 0 for t in TEAM_NAMES}  # 總失分
     h2h = {}
 
     if df_team_m is not None:
         for _, r in df_team_m.iterrows():
             t1, t2 = r["隊伍A"], r["隊伍B"]
-            s1, s2 = int(r["得分A"]), int(r["得分B"])
             w = r["勝隊"]
             if w in TEAM_NAMES:
                 t_wins[w] += 1
@@ -225,30 +222,21 @@ def calculate_team_standings():
                 t_losses[l] += 1
                 h2h[(t1, t2)] = w
                 h2h[(t2, t1)] = w
-            t_pts_for[t1] += s1
-            t_pts_against[t1] += s2
-            t_pts_for[t2] += s2
-            t_pts_against[t2] += s1
-
-    # 淨勝分
-    t_diff = {t: t_pts_for[t] - t_pts_against[t] for t in TEAM_NAMES}
 
     def compare_teams(t1, t2):
+        # 1. 優先比勝場
         if t_wins[t1] != t_wins[t2]:
             return 1 if t_wins[t1] > t_wins[t2] else -1
+        # 2. 次要比對戰勝負 (H2H)
         winner = h2h.get((t1, t2))
         if winner == t1:
             return 1
         elif winner == t2:
             return -1
-        if t_diff[t1] != t_diff[t2]:
-            return 1 if t_diff[t1] > t_diff[t2] else -1
-        if t_pts_for[t1] != t_pts_for[t2]:
-            return 1 if t_pts_for[t1] > t_pts_for[t2] else -1
         return 0
 
     ranked_teams = sorted(TEAM_NAMES, key=cmp_to_key(compare_teams), reverse=True)
-    return t_wins, t_losses, t_pts_for, t_pts_against, t_diff, ranked_teams
+    return t_wins, t_losses, ranked_teams
 
 # ==========================================
 # 4. 側邊欄與權限控制
@@ -302,21 +290,6 @@ def render_pk_section(rank_target, candidates, player_map):
         else:
             st.warning("等待管理員進行 PK 加賽裁決...")
 
-    elif num_c == 4:
-        st.markdown("1. 盲抽兩兩對決 (A vs B, C vs D)。<br>2. 兩邊勝者打 PK 決賽！", unsafe_allow_html=True)
-        if is_admin:
-            col_a, col_b = st.columns(2)
-            with col_a:
-                win_sf1 = st.selectbox("準決賽 A 勝者：", candidates, format_func=lambda x: f"{x}號 {player_map[x]}", key=f"pk_sel_4_sfa_{rank_target}")
-                win_sf2 = st.selectbox("準決賽 B 勝者：", candidates, format_func=lambda x: f"{x}號 {player_map[x]}", key=f"pk_sel_4_sfb_{rank_target}")
-            with col_b:
-                chosen = st.selectbox(f"【PK 決賽】最終勝者：", candidates, format_func=lambda x: f"{x}號 {player_map[x]}", key=f"pk_sel_4_fin_{rank_target}")
-            if st.button(f"確定第 {rank_target} 名 PK 晉級者", key=f"btn_pk_4_{rank_target}", type="primary"):
-                st.session_state[f"selected_rank_{rank_target}"] = chosen
-                st.rerun()
-        else:
-            st.warning("等待管理員進行 PK 加賽裁決...")
-
 # ==========================================
 # 6. 主頁面：個人賽與團體賽切換
 # ==========================================
@@ -329,11 +302,11 @@ player_map = dict(zip(df_reg["編號"], df_reg["選手名稱"])) if not df_reg.e
 # ==========================================
 with main_tab2:
     st.title("👥 9/12 第三屆 三重盃戰鬥陀螺大賽 - 團體賽")
-    st.caption("【團體賽】搶 5 勝（雙人組隊，每組最多打 9 局）| 5 組單循環賽 | 前 2 名晉級冠亞軍決賽")
+    st.caption("【團體賽】5 組單循環賽 | 依勝場與對戰勝負排名 | 前 2 名晉級冠亞軍決賽")
 
     t_tab1, t_tab2, t_tab3, t_tab4 = st.tabs([
         "📝 隊伍與選手登記", 
-        "⚔️ 循環對戰表與比分輸入", 
+        "⚔️ 循環賽對戰控制台", 
         "🏆 冠亞軍決賽", 
         "📊 團體賽積分榜"
     ])
@@ -374,8 +347,6 @@ with main_tab2:
                         "場次": idx,
                         "隊伍A": t1,
                         "隊伍B": t2,
-                        "得分A": 0,
-                        "得分B": 0,
                         "勝隊": "未完賽"
                     })
                 save_team_matches(pd.DataFrame(t_matches))
@@ -385,16 +356,15 @@ with main_tab2:
         else:
             st.dataframe(df_team_p, use_container_width=True, hide_index=True)
 
-    # --- 團體賽 Tab 2: 對戰控制台 ---
+    # --- 團體賽 Tab 2: 對戰控制台 (無比分版) ---
     with t_tab2:
-        st.header("⚔️ 團體賽單循環對戰控制台 (搶 5 勝)")
+        st.header("⚔️ 團體賽單循環對戰控制台")
         if df_team_m is None or df_team_m.empty:
             st.warning("⏳ 請先在「隊伍與選手登記」分頁點擊【初始化團體賽 10 場單循環對戰表】！")
         else:
             for m_idx, r in df_team_m.iterrows():
                 m_num = int(r["場次"])
                 t1, t2 = r["隊伍A"], r["隊伍B"]
-                s1, s2 = int(r["得分A"]), int(r["得分B"])
                 w_team = r["勝隊"]
 
                 p1_str = f"({df_team_p.loc[df_team_p['組別']==t1, '選手1'].values[0]} & {df_team_p.loc[df_team_p['組別']==t1, '選手2'].values[0]})" if not df_team_p.empty else ""
@@ -403,26 +373,23 @@ with main_tab2:
                 st.write(f"#### 🥊 場次 {m_num}：**🔴 {t1}** {p1_str} 🆚 **🔵 {t2}** {p2_str}")
                 
                 if is_admin:
-                    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+                    c1, c2, c3 = st.columns([3, 3, 2])
                     with c1:
-                        new_s1 = st.number_input(f"{t1} 得分", min_value=0, max_value=5, value=s1, key=f"tm_s1_{m_idx}")
-                    with c2:
-                        new_s2 = st.number_input(f"{t2} 得分", min_value=0, max_value=5, value=s2, key=f"tm_s2_{m_idx}")
-                    with c3:
-                        opts = ["未完賽", t1, t2]
-                        curr_w = w_team if w_team in opts else "未完賽"
-                        new_w = st.selectbox("判定勝隊", opts, index=opts.index(curr_w), key=f"tm_w_{m_idx}")
-                    with c4:
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        if st.button("💾 更新比分", key=f"tm_btn_{m_idx}"):
-                            df_team_m.at[m_idx, "得分A"] = new_s1
-                            df_team_m.at[m_idx, "得分B"] = new_s2
-                            df_team_m.at[m_idx, "勝隊"] = new_w
+                        if st.button(f"🏆 {t1} 獲勝", key=f"tm_btn_a_{m_idx}", use_container_width=True, type="primary" if w_team == t1 else "secondary"):
+                            df_team_m.at[m_idx, "勝隊"] = t1
                             save_team_matches(df_team_m)
-                            st.toast(f"場次 {m_num} 比分更新成功！")
+                            st.toast(f"場次 {m_num}：{t1} 勝出！")
                             st.rerun()
+                    with c2:
+                        if st.button(f"🏆 {t2} 獲勝", key=f"tm_btn_b_{m_idx}", use_container_width=True, type="primary" if w_team == t2 else "secondary"):
+                            df_team_m.at[m_idx, "勝隊"] = t2
+                            save_team_matches(df_team_m)
+                            st.toast(f"場次 {m_num}：{t2} 勝出！")
+                            st.rerun()
+                    with c3:
+                        st.caption(f"目前勝隊：`{w_team}`")
                 else:
-                    st.write(f"比分：`{s1}` : `{s2}` | 勝隊：`{w_team}`")
+                    st.write(f"比賽結果：`{w_team}`")
                 st.write("---")
 
     # --- 團體賽 Tab 3: 冠亞軍決賽 ---
@@ -433,54 +400,47 @@ with main_tab2:
         if df_team_m is None or completed_tm < 10:
             st.warning(f"⏳ 團體賽預賽尚未結束（已完成 {completed_tm}/10 場）")
         else:
-            t_wins, t_losses, t_pts_for, t_pts_against, t_diff, ranked_teams = calculate_team_standings()
+            t_wins, t_losses, ranked_teams = calculate_team_standings()
             
-            # 檢查第 2 名與第 3 名是否出現勝場與淨勝分完全平手
+            # 檢查第 2 名與第 3 名是否勝場數相同 (且無法由對戰勝負判定，即發生三角糾纏同分)
             t2, t3 = ranked_teams[1], ranked_teams[2]
-            if t_wins[t2] == t_wins[t3] and t_diff[t2] == t_diff[t3] and "selected_team_rank_2" not in st.session_state:
-                st.error(f"⚠️ 團體賽第 2 名門檻出現完全同分：【{t2}】 與 【{t3}】！")
+            if t_wins[t2] == t_wins[t3] and "selected_team_rank_2" not in st.session_state:
+                st.error(f"⚠️ 團體賽第 2 名出現平手狀況：【{t2}】 與 【{t3}】（勝場同為 {t_wins[t2]} 勝）！")
                 if is_admin:
-                    chosen_t2 = st.selectbox("選擇 PK 勝出晉級冠亞軍賽的隊伍：", [t2, t3], key="pk_team_sel_2")
+                    chosen_t2 = st.selectbox("請由管理員指定/PK裁決晉級冠亞軍賽的隊伍：", [t2, t3], key="pk_team_sel_2")
                     if st.button("確定團體賽第 2 名晉級者", type="primary"):
                         st.session_state["selected_team_rank_2"] = chosen_t2
                         st.rerun()
                 else:
-                    st.warning("等待管理員進行 PK 加賽裁決...")
+                    st.warning("等待管理員進行裁決...")
             else:
                 final_t1 = ranked_teams[0]
                 final_t2 = st.session_state.get("selected_team_rank_2", ranked_teams[1])
 
                 if df_team_f is None:
-                    df_team_f = pd.DataFrame([{"隊伍1": final_t1, "隊伍2": final_t2, "得分1": 0, "得分2": 0, "冠軍": ""}])
+                    df_team_f = pd.DataFrame([{"隊伍1": final_t1, "隊伍2": final_t2, "冠軍": ""}])
                     save_team_finals(df_team_f)
 
                 tf_r = df_team_f.iloc[0]
                 t1_f, t2_f = tf_r["隊伍1"], tf_r["隊伍2"]
-                ts1, ts2 = int(tf_r["得分1"]), int(tf_r["得分2"])
                 champ = tf_r["冠軍"]
 
-                st.subheader(f"👑 冠亞軍決賽：**🔴 {t1_f}** 🆚 **🔵 {t2_f}** (搶 5 勝)")
+                st.subheader(f"👑 冠亞軍決賽：**🔴 {t1_f}** 🆚 **🔵 {t2_f}**")
                 
                 if is_admin:
-                    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+                    c1, c2 = st.columns([3, 3])
                     with c1:
-                        nts1 = st.number_input(f"{t1_f} 得分", min_value=0, max_value=5, value=ts1, key="tf_s1")
+                        if st.button(f"🎉 判定【{t1_f}】為總冠軍", key="tf_btn_1", type="primary" if champ == t1_f else "secondary", use_container_width=True):
+                            df_team_f.at[0, "冠軍"] = t1_f
+                            save_team_finals(df_team_f)
+                            st.rerun()
                     with c2:
-                        nts2 = st.number_input(f"{t2_f} 得分", min_value=0, max_value=5, value=ts2, key="tf_s2")
-                    with c3:
-                        opts_c = ["未決定", t1_f, t2_f]
-                        curr_c = champ if champ in opts_c else "未決定"
-                        nchamp = st.selectbox("選擇團體賽總冠軍", opts_c, index=opts_c.index(curr_c), key="tf_c")
-                    with c4:
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        if st.button("💾 更新決賽結果", type="primary"):
-                            df_team_f.at[0, "得分1"] = nts1
-                            df_team_f.at[0, "得分2"] = nts2
-                            df_team_f.at[0, "冠軍"] = nchamp
+                        if st.button(f"🎉 判定【{t2_f}】為總冠軍", key="tf_btn_2", type="primary" if champ == t2_f else "secondary", use_container_width=True):
+                            df_team_f.at[0, "冠軍"] = t2_f
                             save_team_finals(df_team_f)
                             st.rerun()
                 else:
-                    st.write(f"比分：`{ts1}` : `{ts2}` | 總冠軍：`{champ}`")
+                    st.write(f"總冠軍：`{champ if champ else '比賽中'}`")
 
                 if champ and champ != "未決定":
                     st.balloons()
@@ -495,7 +455,7 @@ with main_tab2:
     with t_tab4:
         st.header("📊 團體賽即時積分榜")
         if df_team_m is not None:
-            t_wins, t_losses, t_pts_for, t_pts_against, t_diff, ranked_teams = calculate_team_standings()
+            t_wins, t_losses, ranked_teams = calculate_team_standings()
             t_table = []
             for rank, t in enumerate(ranked_teams, 1):
                 p1 = df_team_p.loc[df_team_p["組別"]==t, "選手1"].values[0] if not df_team_p.empty else ""
@@ -505,10 +465,7 @@ with main_tab2:
                     "隊伍名稱": t,
                     "選手名單": f"{p1} & {p2}",
                     "勝場": t_wins[t],
-                    "敗場": t_losses[t],
-                    "總得分": t_pts_for[t],
-                    "總失分": t_pts_against[t],
-                    "淨勝分 (Diff)": t_diff[t]
+                    "敗場": t_losses[t]
                 })
             st.table(t_table)
 
@@ -517,7 +474,7 @@ with main_tab2:
 # ==========================================
 with main_tab1:
     st.title("💥 9/12 第三屆 三重盃戰鬥陀螺大賽 - 個人賽")
-    st.caption("【個人賽】預賽搶 4 分制 | 限定 10 人 4 輪瑞士輪 | 冠軍獎品：UX-15 鮫鯊狂鱗")
+    st.caption("【個人賽】預賽採 4 分制 | 限定 10 人 4 輪瑞士輪 | 冠軍獎品：UX-15 鮫鯊狂鱗")
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📝 選手報名與抽籤", 
@@ -646,12 +603,12 @@ with main_tab1:
                 if is_admin:
                     c1, c2, c3 = st.columns([2, 2, 3])
                     with c1:
-                        if st.button(f"🏆 {p1_str} 獲勝 (先滿4分)", key=f"r{current_max_round}_{m_idx}_p1", use_container_width=True, type="primary" if w_id == p1_id else "secondary"):
+                        if st.button(f"🏆 {p1_str} 獲勝", key=f"r{current_max_round}_{m_idx}_p1", use_container_width=True, type="primary" if w_id == p1_id else "secondary"):
                             df_swiss.at[m_idx, "勝者_編號"] = p1_id
                             save_swiss_matches(df_swiss)
                             st.rerun()
                     with c2:
-                        if st.button(f"🏆 {p2_str} 獲勝 (先滿4分)", key=f"r{current_max_round}_{m_idx}_p2", use_container_width=True, type="primary" if w_id == p2_id else "secondary"):
+                        if st.button(f"🏆 {p2_str} 獲勝", key=f"r{current_max_round}_{m_idx}_p2", use_container_width=True, type="primary" if w_id == p2_id else "secondary"):
                             df_swiss.at[m_idx, "勝者_編號"] = p2_id
                             save_swiss_matches(df_swiss)
                             st.rerun()
@@ -687,7 +644,7 @@ with main_tab1:
                     })
                 st.dataframe(pd.DataFrame(disp), use_container_width=True, hide_index=True)
 
-    # --- Tab 4: 決賽與全排名同分 PK 處理 ---
+    # --- Tab 4: 決賽 ---
     with tab4:
         st.header("🏆 四強單淘汰決賽")
         total_p = sum(1 for w in df_swiss["勝者_編號"] if w != 0) if df_swiss is not None else 0
