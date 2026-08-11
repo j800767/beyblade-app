@@ -7,7 +7,7 @@ from functools import cmp_to_key
 # ==========================================
 # 1. 基礎設定與檔案路徑
 # ==========================================
-st.set_page_config(page_title="三重盃 陀螺賽事管理系統", page_icon="💥", layout="wide")
+st.set_page_config(page_title="第三屆 三重盃 戰鬥陀螺大賽", page_icon="💥", layout="wide")
 
 REG_FILE = "players_registration.csv"          # 個人賽選手名單 (10人)
 SWISS_MATCH_FILE = "swiss_matches.csv"         # 個人賽瑞士輪賽程檔案
@@ -74,8 +74,8 @@ def load_team_data():
     columns = ["組別", "隊員別", "選手名稱"]
     default_rows = []
     for team in TEAM_NAMES:
-        default_rows.append({"組別": team, "隊員別": "隊員 1", "選手名稱": ""})
-        default_rows.append({"組別": team, "隊員別": "隊員 2", "選手名稱": ""})
+        default_rows.append({"組別": team, "隊員別": "隊員 A", "選手名稱": ""})
+        default_rows.append({"組別": team, "隊員別": "隊員 B", "選手名稱": ""})
     return pd.DataFrame(default_rows, columns=columns).fillna("")
 
 def save_team_data(df): 
@@ -116,7 +116,7 @@ df_team_matches = load_team_matches()
 df_team_finals = load_team_finals()
 
 # ==========================================
-# 3. 瑞士輪演算與正確 H2H 機制
+# 3. 個人賽瑞士輪演算與正確 H2H / SOS 機制
 # ==========================================
 def calculate_swiss_standings():
     wins = {p_id: 0 for p_id in range(1, 11)}
@@ -139,10 +139,10 @@ def calculate_swiss_standings():
                 h2h[(p1, p2)] = w
                 h2h[(p2, p1)] = w
     
-    # 對手強度分 (SOS / Buchholz)
+    # 計算對手強度分 SOS (Buchholz)：所擊敗過的對手的總勝場加總
     sos = {p_id: sum(wins[opp] for opp in defeated_opponents[p_id]) for p_id in range(1, 11)}
 
-    # 正確的 H2H + 勝場 + SOS 比較器
+    # 正確的 H2H + 勝場 + SOS 自訂比較器
     def compare_players(p1, p2):
         # 1. 第一順位：總勝場數
         if wins[p1] != wins[p2]:
@@ -256,7 +256,8 @@ main_mode = st.sidebar.radio(
 # 5. 模式一：個人賽
 # ==========================================
 if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
-    st.title("💥 三重盃個人賽（10人 4輪瑞士輪 ➡️ 4強單淘汰賽）")
+    st.title("💥 9/12 第三屆 三重盃戰鬥陀螺大賽 - 個人賽")
+    st.caption("【個人賽】預賽搶 4 分制 | 限定 10 人 4 輪瑞士輪 | 冠軍獎品：UX-15 鮫鯊狂鱗")
     
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📝 選手報名與抽籤", 
@@ -316,7 +317,7 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
         if is_admin:
             if len(df_reg) == 10 and (df_reg["編號"] == 0).all():
                 st.write("---")
-                if st.button("🎲 滿 10 人！盲抽生成 1~10 號編號並生成第 1 輪對戰", type="primary", use_container_width=True):
+                if st.button("🎲 滿 10 人！盲抽 1~10 號編號並生成第 1 輪對戰", type="primary", use_container_width=True):
                     nums = list(range(1, 11))
                     random.shuffle(nums)
                     df_reg["編號"] = nums
@@ -358,7 +359,7 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
 
     # --- Tab 2: 預賽控制台 ---
     with tab2:
-        st.header("⚔️ 預賽：4輪瑞士輪控制台")
+        st.header("⚔️ 預賽：4輪瑞士輪控制台 (常規賽採 4 分制)")
         if df_swiss is None or (df_reg["編號"] == 0).all():
             st.warning("⏳ 請先在「選手報名與抽籤」分頁集滿 10 人並完成盲抽！")
         else:
@@ -389,12 +390,12 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                 if is_admin:
                     c1, c2, c3 = st.columns([2, 2, 3])
                     with c1:
-                        if st.button(f"🏆 {p1_str} 獲勝", key=f"r{current_max_round}_{m_idx}_p1", use_container_width=True, type="primary" if w_id == p1_id else "secondary"):
+                        if st.button(f"🏆 {p1_str} 獲勝 (先滿4分)", key=f"r{current_max_round}_{m_idx}_p1", use_container_width=True, type="primary" if w_id == p1_id else "secondary"):
                             df_swiss.at[m_idx, "勝者_編號"] = p1_id
                             save_swiss_matches(df_swiss)
                             st.rerun()
                     with c2:
-                        if st.button(f"🏆 {p2_str} 獲勝", key=f"r{current_max_round}_{m_idx}_p2", use_container_width=True, type="primary" if w_id == p2_id else "secondary"):
+                        if st.button(f"🏆 {p2_str} 獲勝 (先滿4分)", key=f"r{current_max_round}_{m_idx}_p2", use_container_width=True, type="primary" if w_id == p2_id else "secondary"):
                             df_swiss.at[m_idx, "勝者_編號"] = p2_id
                             save_swiss_matches(df_swiss)
                             st.rerun()
@@ -444,7 +445,7 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
             
             is_wins_tied = (wins[rank4_id] == wins[rank5_id])
             
-            # 檢查排序後若勝場同分且 H2H 平手、SOS 也相同時才跳出加賽
+            # 觸發一分定勝負 PK 加賽條款：勝場相同、對戰互咬/未對戰、且 SOS 完全相同
             if is_wins_tied and sos[rank4_id] == sos[rank5_id] and "selected_4th" not in st.session_state:
                 target_wins = wins[rank4_id]
                 target_sos = sos[rank4_id]
@@ -453,20 +454,20 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                     if wins[p] == target_wins and sos[p] == target_sos
                 ]
                 
-                st.error(f"⚠️ 偵測到第 4 名晉級點存在勝場與 SOS 完全同分爭議！同分選手：{', '.join([f'{p}號 {player_map[p]}' for p in tied_candidates])}")
-                st.info("請現場進行【一分定勝負 PK 加賽】，並由管理員指定最終晉級四強的第 4 名選手：")
+                st.error(f"⚠️ 觸發 PK 加賽條款！第 4 名晉級資格出現勝場與 SOS 完全同分：{', '.join([f'{p}號 {player_map[p]}' for p in tied_candidates])}")
+                st.warning("📌 PK 賽規則：1 顆陀螺不換零件，進行【一分定勝負（1-Point Sudden Death）】單淘汰賽。")
                 
                 if is_admin:
                     chosen_4th = st.selectbox(
-                        "選擇一分加賽獲勝並晉級四強的第 4 名選手：", 
+                        "選擇 PK 加賽勝出並取得第 4 名晉級決賽資格的選手：", 
                         tied_candidates, 
                         format_func=lambda x: f"{x}號 {player_map[x]}"
                     )
-                    if st.button("確定第 4 名晉級者", type="primary"):
+                    if st.button("確定第 4 名 PK 晉級者", type="primary"):
                         st.session_state["selected_4th"] = chosen_4th
                         st.rerun()
                 else:
-                    st.warning("等待管理員裁決平手加賽結果...")
+                    st.warning("等待管理員裁決平手 PK 加賽結果...")
             
             else:
                 final_4 = ranked_ids[:3]
@@ -601,7 +602,7 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                 if p1_w and p3_w and p1_w != "" and p3_w != "":
                     st.write("---")
                     st.balloons()
-                    st.subheader("🎉 個人賽最終前 4 強名單")
+                    st.subheader("🎉 個人賽最終前 4 強榮譽榜")
                     
                     champion = df_finals.loc[df_finals["階段"] == "冠軍賽", "勝者"].values[0]
                     runner_up = df_finals.loc[df_finals["階段"] == "冠軍賽", "敗者"].values[0]
@@ -609,7 +610,7 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                     fourth_place = df_finals.loc[df_finals["階段"] == "季軍賽", "敗者"].values[0]
 
                     st.success(f"""
-                    * 🥇 **冠軍**：{champion}
+                    * 🥇 **冠軍**：{champion} （獲得獎品：UX-15 鮫鯊狂鱗）
                     * 🥈 **亞軍**：{runner_up}
                     * 🥉 **季軍**：{third_place}
                     * 🏅 **殿軍**：{fourth_place}
@@ -628,7 +629,7 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
                     "選手名稱": player_map.get(p_id, ""),
                     "勝場": wins[p_id],
                     "敗場": losses[p_id],
-                    "SOS 強度": sos[p_id]
+                    "SOS 對手強度分": sos[p_id]
                 })
             st.table(table_data)
 
@@ -636,7 +637,8 @@ if main_mode == "個人賽 (10人 4輪瑞士輪+4強)":
 # 6. 模式二：雙人團體賽
 # ==========================================
 elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
-    st.title("🤝 三重盃雙人團體賽（5隊單循環 ➡️ 冠亞軍決賽）")
+    st.title("🤝 9/12 第三屆 三重盃戰鬥陀螺大賽 - 雙人團體賽")
+    st.caption("【雙人團體賽】正賽搶 6 分制 | 交替發射 A➡️B➡️A➡️B | 同隊零件不重複 | 冠軍獎品：CX-18 腕龍鞭打 * 2")
     
     ttab1, ttab2, ttab3, ttab4, ttab5 = st.tabs([
         "📝 5組選手名單管理", 
@@ -648,33 +650,33 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
     
     team_player_map = {}
     for team in TEAM_NAMES:
-        p1_row = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 1")]
-        p2_row = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 2")]
+        p1_row = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 A")]
+        p2_row = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 B")]
         p1 = p1_row["選手名稱"].values[0] if not p1_row.empty else ""
         p2 = p2_row["選手名稱"].values[0] if not p2_row.empty else ""
-        team_player_map[team] = f"{team} ({p1} / {p2})" if (p1 or p2) else team
+        team_player_map[team] = f"{team} ({p1} & {p2})" if (p1 or p2) else team
 
     # --- Tab 1: 5組選手名單管理 ---
     with ttab1:
-        st.header("📝 團體名單管理")
+        st.header("📝 團體名單管理 (一隊 2 人)")
         ui_inputs = {}
         cols = st.columns(2)
         for idx, team in enumerate(TEAM_NAMES):
             with cols[idx % 2]:
                 st.subheader(f"🛡️ {team}")
-                row_p1 = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 1")].iloc[0]
-                row_p2 = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 2")].iloc[0]
+                row_p1 = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 A")].iloc[0]
+                row_p2 = df_teams[(df_teams["組別"] == team) & (df_teams["隊員別"] == "隊員 B")].iloc[0]
                 
-                p1 = st.text_input(f"隊員 1 姓名", value=str(row_p1["選手名稱"]), key=f"{team}_p1", disabled=not is_admin)
-                p2 = st.text_input(f"隊員 2 姓名", value=str(row_p2["選手名稱"]), key=f"{team}_p2", disabled=not is_admin)
+                p1 = st.text_input(f"隊員 A 姓名", value=str(row_p1["選手名稱"]), key=f"{team}_p1", disabled=not is_admin)
+                p2 = st.text_input(f"隊員 B 姓名", value=str(row_p2["選手名稱"]), key=f"{team}_p2", disabled=not is_admin)
                 ui_inputs[team] = {"p1": p1, "p2": p2}
                 st.write("---")
 
         if is_admin and st.button("💾 儲存團體名單並初始化 10 場預賽賽程", type="primary", use_container_width=True):
             new_rows = []
             for team in TEAM_NAMES:
-                new_rows.append({"組別": team, "隊員別": "隊員 1", "選手名稱": ui_inputs[team]["p1"].strip()})
-                new_rows.append({"組別": team, "隊員別": "隊員 2", "選手名稱": ui_inputs[team]["p2"].strip()})
+                new_rows.append({"組別": team, "隊員別": "隊員 A", "選手名稱": ui_inputs[team]["p1"].strip()})
+                new_rows.append({"組別": team, "隊員別": "隊員 B", "選手名稱": ui_inputs[team]["p2"].strip()})
             df_teams = pd.DataFrame(new_rows)
             save_team_data(df_teams)
             
@@ -690,7 +692,8 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
 
     # --- Tab 2: 單循環控制台 ---
     with ttab2:
-        st.header("⚔️ 團體預賽：5 隊單循環控制台 (共 10 場)")
+        st.header("⚔️ 團體預賽：5 隊單循環控制台 (正賽搶 6 分制)")
+        st.info("💡 **發射規則**：雙方需依 **選手 A ➡️ 選手 B ➡️ 選手 A ➡️ 選手 B** 固定順序交替上場，先達 6 分者獲勝！")
         if df_team_matches is None:
             st.warning("⏳ 請先在「5組選手名單管理」點擊【儲存團體名單並初始化預賽賽程】！")
         else:
@@ -707,12 +710,12 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
                 if is_admin:
                     c1, c2, c3 = st.columns([2, 2, 3])
                     with c1:
-                        if st.button(f"🏆 {t1} 獲勝", key=f"tm_{m_idx}_t1", use_container_width=True, type="primary" if winner == t1 else "secondary"):
+                        if st.button(f"🏆 {t1} 獲勝 (先滿6分)", key=f"tm_{m_idx}_t1", use_container_width=True, type="primary" if winner == t1 else "secondary"):
                             df_team_matches.at[m_idx, "勝隊"] = t1
                             save_team_matches(df_team_matches)
                             st.rerun()
                     with c2:
-                        if st.button(f"🏆 {t2} 獲勝", key=f"tm_{m_idx}_t2", use_container_width=True, type="primary" if winner == t2 else "secondary"):
+                        if st.button(f"🏆 {t2} 獲勝 (先滿6分)", key=f"tm_{m_idx}_t2", use_container_width=True, type="primary" if winner == t2 else "secondary"):
                             df_team_matches.at[m_idx, "勝隊"] = t2
                             save_team_matches(df_team_matches)
                             st.rerun()
@@ -776,22 +779,23 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
             rank2_team = ranked_teams[1]
             rank3_team = ranked_teams[2]
             
+            # 觸發團體賽平手 PK 加賽條款
             if t_wins[rank2_team] == t_wins[rank3_team] and "selected_team_2nd" not in st.session_state:
                 tied_teams = [t for t in ranked_teams if t_wins[t] == t_wins[rank2_team]]
-                st.error(f"⚠️ 偵測到第 2 名晉級點存在戰績相同/互咬爭議！同勝場隊伍：{', '.join([team_player_map.get(t, t) for t in tied_teams])}")
-                st.info("請現場派出代表進行【一分定勝負 PK 加賽】，並由管理員指定最終晉級總決賽的第 2 名隊伍：")
+                st.error(f"⚠️ 觸發團體平手加賽條款！第 2 名晉級資格出現勝場相同且對戰互咬：{', '.join([team_player_map.get(t, t) for t in tied_teams])}")
+                st.warning("📌 PK 賽規則：每隊派出 1 位代表，使用 1 顆陀螺（不換零件），進行【一分定勝負（1-Point Sudden Death）】單淘汰賽。")
                 
                 if is_admin:
                     chosen_2nd = st.selectbox(
-                        "選擇一分加賽獲勝並晉級總決賽的第 2 名隊伍：", 
+                        "選擇 PK 加賽獲勝並晉級總決賽的第 2 名隊伍：", 
                         tied_teams, 
                         format_func=lambda x: team_player_map.get(x, x)
                     )
-                    if st.button("確定第 2 名晉級隊伍", type="primary"):
+                    if st.button("確定第 2 名 PK 晉級隊伍", type="primary"):
                         st.session_state["selected_team_2nd"] = chosen_2nd
                         st.rerun()
                 else:
-                    st.warning("等待管理員裁決平手加賽結果...")
+                    st.warning("等待管理員裁決平手 PK 加賽結果...")
             
             else:
                 t1_top = ranked_teams[0]
@@ -841,9 +845,9 @@ elif main_mode == "雙人團體賽 (5隊單循環+決賽)":
                     runner_team_id = str(df_team_finals.loc[0, "敗隊"])
                     runner_team = team_player_map.get(runner_team_id, runner_team_id)
                     
-                    st.subheader("🎉 雙人團體賽最終名次")
+                    st.subheader("🎉 雙人團體賽最終榮譽榜")
                     st.success(f"""
-                    * 🥇 **團體冠軍**：{champion_team}
+                    * 🥇 **團體冠軍**：{champion_team} （獲得獎品：CX-18 腕龍鞭打 * 2）
                     * 🥈 **團體亞軍**：{runner_team}
                     """)
 
