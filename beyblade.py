@@ -177,7 +177,7 @@ def generate_next_round_pairs(current_round):
             "勝者_編號": 0
         })
     
-    # 加入輪空場次 (勝者直接記為輪空者)
+    # 加入輪空場次
     if bye_candidate is not None:
         match_data.append({
             "輪次": current_round,
@@ -190,7 +190,7 @@ def generate_next_round_pairs(current_round):
     return match_data
 
 # ==========================================
-# 3. 團體賽資料存取與簡化計算 (僅看勝場與H2H)
+# 3. 團體賽資料存取與計算 (修正三方/多方平手問題)
 # ==========================================
 def load_team_players():
     if os.path.exists(TEAM_DATA_FILE):
@@ -242,18 +242,9 @@ def calculate_team_standings():
                 h2h[(t1, t2)] = w
                 h2h[(t2, t1)] = w
 
-    def compare_teams(t1, t2):
-        if t_wins[t1] != t_wins[t2]:
-            return 1 if t_wins[t1] > t_wins[t2] else -1
-        winner = h2h.get((t1, t2))
-        if winner == t1:
-            return 1
-        elif winner == t2:
-            return -1
-        return 0
-
-    ranked_teams = sorted(TEAM_NAMES, key=cmp_to_key(compare_teams), reverse=True)
-    return t_wins, t_losses, ranked_teams
+    # 基礎按勝場高到低排序，避免兩兩 H2H 導致三方互咬被誤判
+    ranked_teams = sorted(TEAM_NAMES, key=lambda t: t_wins[t], reverse=True)
+    return t_wins, t_losses, h2h, ranked_teams
 
 # ==========================================
 # 4. 側邊欄與權限控制
@@ -277,11 +268,11 @@ if st.session_state["is_admin"]:
 is_admin = st.session_state["is_admin"]
 
 # ==========================================
-# 5. 通用 PK 加賽渲染模組
+# 5. 通用 PK 加賽渲染模組 (個人賽)
 # ==========================================
 def render_pk_section(rank_target, candidates, player_map):
     st.error(f"⚠️ 觸發 PK 加賽條款！第 {rank_target} 名門檻出現完全同分：{', '.join([f'{p}號 {player_map[p]}' for p in candidates])}")
-    st.info("📌 **PK 賽規則**：1 顆陀螺不換零件，進行【一分定勝負（1-Point Sudden Death）】單淘汰賽。")
+    st.info("📌 **PK 賽規則**：1 顆陀螺不換零件，進行【一分定勝負】單淘汰賽。")
 
     num_c = len(candidates)
     if num_c == 2:
@@ -415,20 +406,44 @@ with main_tab2:
         if df_team_m is None or completed_tm < 10:
             st.warning(f"⏳ 團體賽預賽尚未結束（已完成 {completed_tm}/10 場）")
         else:
-            t_wins, t_losses, ranked_teams = calculate_team_standings()
+            t_wins, t_losses, h2h, ranked_teams = calculate_team_standings()
             
-            t2, t3 = ranked_teams[1], ranked_teams[2]
-            if t_wins[t2] == t_wins[t3] and "selected_team_rank_2" not in st.session_state:
-                st.error(f"⚠️ 團體賽第 2 名出現平手狀況：【{t2}】 與 【{t3}】（勝場同為 {t_wins[t2]} 勝）！")
+            top3 = ranked_teams[:3]
+            is_3way_tie = (t_wins[top3[0]] == t_wins[top3[1]] == t_wins[top3[2]])
+            
+            # 處理三方平手 (如 A, B, E 皆 3 勝 1 敗)
+            if is_3way_tie and ("selected_team_rank_1" not in st.session_state or "selected_team_rank_2" not in st.session_state):
+                st.error(f"⚠️ 觸發三方互咬加賽！前 3 名出現完全同分：【{top3[0]}】、【{top3[1]}】與【{top3[2]}】（勝場同為 {t_wins[top3[0]]} 勝，且對戰互有勝負）！")
+                st.info("📌 **三方 PK 賽建議**：1 隊盲抽輪空，另外 2 隊先打 1 場 PK，勝者與輪空隊爭奪第 1、2 名晉級冠亞軍決賽。")
+                
                 if is_admin:
-                    chosen_t2 = st.selectbox("請由管理員指定/PK裁決晉級冠亞軍賽的隊伍：", [t2, t3], key="pk_team_sel_2")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        chosen_t1 = st.selectbox("請指定 PK 最終【第 1 名】隊伍：", top3, key="pk_team_sel_1")
+                    with col2:
+                        remaining_teams = [t for t in top3 if t != chosen_t1]
+                        chosen_t2 = st.selectbox("請指定 PK 最終【第 2 名】隊伍：", remaining_teams, key="pk_team_sel_2")
+                        
+                    if st.button("確定冠亞軍決賽晉級隊伍 (第1、2名)", type="primary"):
+                        st.session_state["selected_team_rank_1"] = chosen_t1
+                        st.session_state["selected_team_rank_2"] = chosen_t2
+                        st.rerun()
+                else:
+                    st.warning("等待管理員進行三方 PK 加賽裁決...")
+
+            # 處理第 2 名與第 3 名平手 (如第 1 名獨占，第 2、3 名同勝場)
+            elif t_wins[ranked_teams[1]] == t_wins[ranked_teams[2]] and "selected_team_rank_2" not in st.session_state:
+                st.error(f"⚠️ 團體賽第 2 名出現平手狀況：【{ranked_teams[1]}】 與 【{ranked_teams[2]}】（勝場同為 {t_wins[ranked_teams[1]]} 勝）！")
+                if is_admin:
+                    chosen_t2 = st.selectbox("請由管理員指定/PK裁決晉級冠亞軍賽的隊伍：", [ranked_teams[1], ranked_teams[2]], key="pk_team_sel_2_only")
                     if st.button("確定團體賽第 2 名晉級者", type="primary"):
                         st.session_state["selected_team_rank_2"] = chosen_t2
                         st.rerun()
                 else:
                     st.warning("等待管理員進行裁決...")
+
             else:
-                final_t1 = ranked_teams[0]
+                final_t1 = st.session_state.get("selected_team_rank_1", ranked_teams[0])
                 final_t2 = st.session_state.get("selected_team_rank_2", ranked_teams[1])
 
                 if df_team_f is None:
@@ -468,7 +483,7 @@ with main_tab2:
     with t_tab4:
         st.header("📊 團體賽即時積分榜")
         if df_team_m is not None:
-            t_wins, t_losses, ranked_teams = calculate_team_standings()
+            t_wins, t_losses, _, ranked_teams = calculate_team_standings()
             t_table = []
             for rank, t in enumerate(ranked_teams, 1):
                 p1 = df_team_p.loc[df_team_p["組別"]==t, "選手1"].values[0] if not df_team_p.empty else ""
@@ -547,7 +562,6 @@ with main_tab1:
                 st.write("---")
                 st.subheader("🎲 抽籤與第 1 輪對戰生成")
                 
-                # 指定第 1 輪輪空者 (預設選擇名單中的第一個，可手動切換至小孩)
                 bye_candidate_name = st.selectbox(
                     "📌 請選擇第 1 輪指定【輪空 (BYE)】的選手（可指定小孩優先輪空）：",
                     options=df_reg["選手名稱"].tolist(),
@@ -558,7 +572,6 @@ with main_tab1:
                     bye_row = df_reg[df_reg["選手名稱"] == bye_candidate_name]
                     other_rows = df_reg[df_reg["選手名稱"] != bye_candidate_name]
                     
-                    # 隨機打亂其他 10 位選手，並將指定輪空者設為 11 號
                     shuffled_others = other_rows.sample(frac=1).reset_index(drop=True)
                     reordered_df = pd.concat([shuffled_others, bye_row], ignore_index=True)
                     reordered_df["編號"] = list(range(1, 12))
@@ -578,7 +591,7 @@ with main_tab1:
                             "勝者_編號": 0
                         })
                     
-                    # 11 號 (指定輪空者) 直接記為獲得 1 勝
+                    # 11 號 (指定輪空者) 直接自動記 1 勝
                     round1_matches.append({
                         "輪次": 1,
                         "組別標籤": "輪空區 (BYE)",
