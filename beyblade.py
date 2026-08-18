@@ -294,7 +294,7 @@ def render_pk_section(rank_target, candidates, player_map):
             st.warning("等待管理員進行 PK 加賽裁決...")
 
     elif num_c == 3:
-        st.markdown("1. 盲抽 1 人輪空。<br>2. 另外兩人打 1 場 加賽 勝者與輪空者打 PK 決賽！", unsafe_allow_html=True)
+        st.markdown("1. 盲抽 1 人輪空。<br>2. 另外兩人打 1 場加賽，勝者與輪空者打 PK 決賽！", unsafe_allow_html=True)
         if is_admin:
             col_p1, col_p2 = st.columns(2)
             with col_p1:
@@ -483,7 +483,7 @@ with main_tab2:
             st.table(t_table)
 
 # ==========================================
-# 👤 個人賽主區塊 (11人 5輪瑞士輪)
+# 👤 個人賽主區塊 (11人 5輪瑞士輪 + 指定第1輪輪空)
 # ==========================================
 with main_tab1:
     st.title("💥 9/12 第三屆 三重盃戰鬥陀螺大賽 - 個人賽")
@@ -497,7 +497,7 @@ with main_tab1:
         "📊 即時積分榜"
     ])
 
-    # --- Tab 1: 報名 ---
+    # --- Tab 1: 報名與指定輪空抽籤 ---
     with tab1:
         st.header("📝 選手報名與抽籤初始化")
         if is_admin:
@@ -545,16 +545,30 @@ with main_tab1:
         if is_admin:
             if len(df_reg) == 11 and (df_reg["編號"] == 0).all():
                 st.write("---")
-                if st.button("🎲 滿 11 人！盲抽 1~11 號編號並生成第 1 輪對戰", type="primary", use_container_width=True):
-                    nums = list(range(1, 12))
-                    random.shuffle(nums)
-                    df_reg["編號"] = nums
+                st.subheader("🎲 抽籤與第 1 輪對戰生成")
+                
+                # 指定第 1 輪輪空者 (預設選擇名單中的第一個，可手動切換至小孩)
+                bye_candidate_name = st.selectbox(
+                    "📌 請選擇第 1 輪指定【輪空 (BYE)】的選手（可指定小孩優先輪空）：",
+                    options=df_reg["選手名稱"].tolist(),
+                    key="manual_bye_select"
+                )
+                
+                if st.button("🎲 確定指定並產生 1~11 號編號與第 1 輪對戰", type="primary", use_container_width=True):
+                    bye_row = df_reg[df_reg["選手名稱"] == bye_candidate_name]
+                    other_rows = df_reg[df_reg["選手名稱"] != bye_candidate_name]
+                    
+                    # 隨機打亂其他 10 位選手，並將指定輪空者設為 11 號
+                    shuffled_others = other_rows.sample(frac=1).reset_index(drop=True)
+                    reordered_df = pd.concat([shuffled_others, bye_row], ignore_index=True)
+                    reordered_df["編號"] = list(range(1, 12))
+                    df_reg = reordered_df
                     save_registrations(df_reg)
                     
-                    p_ids = nums.copy()
+                    p_ids = list(range(1, 11))
                     random.shuffle(p_ids)
+                    
                     round1_matches = []
-                    # 11 人分 5 場對戰 + 1 人輪空
                     for i in range(0, 10, 2):
                         round1_matches.append({
                             "輪次": 1,
@@ -563,16 +577,18 @@ with main_tab1:
                             "選手B_編號": p_ids[i+1],
                             "勝者_編號": 0
                         })
-                    # 輪空選手 (直接獲得1勝)
+                    
+                    # 11 號 (指定輪空者) 直接記為獲得 1 勝
                     round1_matches.append({
                         "輪次": 1,
                         "組別標籤": "輪空區 (BYE)",
-                        "選手A_編號": p_ids[10],
+                        "選手A_編號": 11,
                         "選手B_編號": 0,
-                        "勝者_編號": p_ids[10]
+                        "勝者_編號": 11
                     })
+                    
                     save_swiss_matches(pd.DataFrame(round1_matches))
-                    st.success("🎉 抽籤成功！第 1 輪瑞士輪對戰 (含1人輪空) 已生成！")
+                    st.success(f"🎉 抽籤完成！已指定【{bye_candidate_name}】於第 1 輪輪空並自動獲得 1 勝！")
                     st.rerun()
 
             st.write("---")
