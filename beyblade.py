@@ -713,7 +713,7 @@ with main_tab1:
         if df_swiss is None or total_p < 30: # 5輪 * 6場 = 30場完賽
             st.warning(f"⏳ 預賽尚未完成（已完成 {total_p}/30 場）")
         else:
-            wins, losses, sos, h2h, _, ranked_ids, _ = calculate_swiss_standings()
+            wins, losses,  h2h, _, ranked_ids, _ = calculate_swiss_standings()
 
             rank4_p = ranked_ids[3]
             candidates_4th = [p for p in ranked_ids if wins[p] == wins[rank4_p] and sos[p] == sos[rank4_p]]
