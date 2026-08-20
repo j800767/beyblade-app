@@ -106,17 +106,18 @@ def calculate_swiss_standings():
     
     sos = {p_id: sum(wins[opp] for opp in defeated_opponents[p_id]) for p_id in range(1, 12)}
 
-    def compare_players(p1, p2):
-        if wins[p1] != wins[p2]:
-            return 1 if wins[p1] > wins[p2] else -1
-        winner = h2h.get((p1, p2))
-        if winner == p1:
-            return 1
-        elif winner == p2:
-            return -1
-        if sos[p1] != sos[p2]:
-            return 1 if sos[p1] > sos[p2] else -1
-        return 0
+def compare_players(p1, p2):
+    # 1. 第一順位：勝場數 (Wins)
+    if wins[p1] != wins[p2]:
+        return 1 if wins[p1] > wins[p2] else -1
+
+    # 2. 第二順位：SOS (對手總勝場分)
+    # 跳過 H2H，直接比對手強度，徹底避免三方互咬與未對戰的卡關問題
+    if sos[p1] != sos[p2]:
+        return 1 if sos[p1] > sos[p2] else -1
+
+    # 3. 若勝場與 SOS 完全相同，保持順序（後續由方案 B 的 PK 加賽條款攔截）
+    return 0
 
     ranked_ids = sorted(range(1, 12), key=cmp_to_key(compare_players), reverse=True)
     return wins, losses, sos, h2h, played_pairs, ranked_ids, bye_players
