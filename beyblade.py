@@ -360,8 +360,7 @@ def render_pk_section(
 
     elif num_c == 3:
         st.markdown(
-            "1. 盲抽 1 人輪空。<br>2. 另外兩人打 1 場加賽，勝者與輪空者打 PK"
-            " 決賽！",
+            "1. 盲抽 1 人輪空。<br>2. 另外兩人打 1 場加賽，勝者與輪空者打 PK 決賽！",
             unsafe_allow_html=True,
         )
         if is_admin:
@@ -789,8 +788,7 @@ with main_tab1:
                 st.subheader("🎲 抽籤與第 1 輪對戰生成")
 
                 bye_candidate_name = st.selectbox(
-                    "📌"
-                    " 請選擇第 1 輪指定【輪空 (BYE)】的選手（可指定小孩優先輪空）：",
+                    "📌 請選擇第 1 輪指定【輪空 (BYE)】的選手（可指定小孩優先輪空）：",
                     options=df_reg["選手名稱"].tolist(),
                     key="manual_bye_select",
                 )
@@ -1022,7 +1020,7 @@ with main_tab1:
                     hide_index=True,
                 )
 
-  # --- Tab 4: 決賽 ---
+    # --- Tab 4: 決賽 ---
     with tab4:
         st.header("🏆 四強單淘汰決賽 (晉級者全隨機抽籤)")
         total_p = (
@@ -1037,18 +1035,21 @@ with main_tab1:
                 calculate_swiss_standings()
             )
 
-            rank4_p = ranked_ids[3]
-            candidates_4th = [
+            # --- 修正後的第 4 名門檻 PK 判定邏輯 ---
+            rank4_p = ranked_ids[3]  # 排序後的第 4 名選手
+
+            # 找出跟第 4 名勝場與 SOS 完全相同的選手
+            all_tied_with_4th = [
                 p
                 for p in ranked_ids
                 if wins[p] == wins[rank4_p] and sos[p] == sos[rank4_p]
             ]
 
-            if (
-                len(candidates_4th) > 1
-                and "selected_rank_4" not in st.session_state
-            ):
-                render_pk_section(4, candidates_4th, player_map)
+            # 只有當同分的選手延伸到了「第 5 名（含）以後」，代表爭奪最後一個門檻才需要 PK
+            need_pk = any(ranked_ids.index(p) >= 4 for p in all_tied_with_4th)
+
+            if need_pk and "selected_rank_4" not in st.session_state:
+                render_pk_section(4, all_tied_with_4th, player_map)
 
             else:
                 final_4 = []
@@ -1059,11 +1060,10 @@ with main_tab1:
                     else:
                         final_4.append(ranked_ids[r_idx])
 
-                final_4_names = [f"{p}號 {player_map.get(p, '')}" for p in final_4]
-                st.success(
-                    "🎉 預賽晉級四強名單："
-                    f" {', '.join(final_4_names)}"
-                )
+                final_4_names = [
+                    f"{p}號 {player_map.get(p, '')}" for p in final_4
+                ]
+                st.success(f"🎉 預賽晉級四強名單： {', '.join(final_4_names)}")
 
                 # 抽籤控制按鈕 (僅管理員或已抽籤狀態顯示)
                 if is_admin:
@@ -1084,15 +1084,15 @@ with main_tab1:
                         finals_data = [
                             {
                                 "階段": "準決賽A",
-                                "選手1": str(player_map.get(s1, '')),
-                                "選手2": str(player_map.get(s2, '')),
+                                "選手1": str(player_map.get(s1, "")),
+                                "選手2": str(player_map.get(s2, "")),
                                 "勝者": "",
                                 "敗者": "",
                             },
                             {
                                 "階段": "準決賽B",
-                                "選手1": str(player_map.get(s3, '')),
-                                "選手2": str(player_map.get(s4, '')),
+                                "選手1": str(player_map.get(s3, "")),
+                                "選手2": str(player_map.get(s4, "")),
                                 "勝者": "",
                                 "敗者": "",
                             },
@@ -1118,7 +1118,9 @@ with main_tab1:
 
                 # 未抽籤時：顯示提示，不渲染下方對戰組合
                 if df_finals is None:
-                    st.info("💡 請點擊上方【🎲 進行四強隨機抽籤】按鈕以產生對戰組合！")
+                    st.info(
+                        "💡 請點擊上方【🎲 進行四強隨機抽籤】按鈕以產生對戰組合！"
+                    )
                 else:
                     # 已抽籤：渲染對戰組合與控制項
                     for col in ["階段", "選手1", "選手2", "勝者", "敗者"]:
@@ -1200,9 +1202,7 @@ with main_tab1:
                                 save_finals(df_finals)
                                 st.rerun()
                         else:
-                            st.write(
-                                f"勝者：`{sf_a_w if sf_a_w else '未決定'}`"
-                            )
+                            st.write(f"勝者：`{sf_a_w if sf_a_w else '未決定'}`")
 
                     with col_sfb:
                         st.markdown("##### ⚔️ 準決賽 B (隨機對戰)")
@@ -1256,9 +1256,7 @@ with main_tab1:
                                 save_finals(df_finals)
                                 st.rerun()
                         else:
-                            st.write(
-                                f"勝者：`{sf_b_w if sf_b_w else '未決定'}`"
-                            )
+                            st.write(f"勝者：`{sf_b_w if sf_b_w else '未決定'}`")
 
                     st.write("---")
                     st.subheader("🥇 2. 總決賽 (Finals)")
@@ -1313,25 +1311,18 @@ with main_tab1:
                                     index=opts_3.index(curr_3),
                                     key="p3_sel",
                                 )
-                                if (
-                                    sel_3 != "請選擇勝者..."
-                                    and sel_3 != p3_w
-                                ):
+                                if sel_3 != "請選擇勝者..." and sel_3 != p3_w:
                                     loser_3 = p3_2 if sel_3 == p3_1 else p3_1
                                     df_finals.loc[
-                                        df_finals["階段"] == "季軍賽",
-                                        "勝者",
+                                        df_finals["階段"] == "季軍賽", "勝者"
                                     ] = str(sel_3)
                                     df_finals.loc[
-                                        df_finals["階段"] == "季軍賽",
-                                        "敗者",
+                                        df_finals["階段"] == "季軍賽", "敗者"
                                     ] = str(loser_3)
                                     save_finals(df_finals)
                                     st.rerun()
                             else:
-                                st.write(
-                                    f"勝者：`{p3_w if p3_w else '未決定'}`"
-                                )
+                                st.write(f"勝者：`{p3_w if p3_w else '未決定'}`")
                         else:
                             st.info("⏳ 等待準決賽兩場結果出爐...")
 
@@ -1352,25 +1343,18 @@ with main_tab1:
                                     index=opts_1.index(curr_1),
                                     key="p1_sel",
                                 )
-                                if (
-                                    sel_1 != "請選擇勝者..."
-                                    and sel_1 != p1_w
-                                ):
+                                if sel_1 != "請選擇勝者..." and sel_1 != p1_w:
                                     loser_1 = p1_2 if sel_1 == p1_1 else p1_1
                                     df_finals.loc[
-                                        df_finals["階段"] == "冠軍賽",
-                                        "勝者",
+                                        df_finals["階段"] == "冠軍賽", "勝者"
                                     ] = str(sel_1)
                                     df_finals.loc[
-                                        df_finals["階段"] == "冠軍賽",
-                                        "敗者",
+                                        df_finals["階段"] == "冠軍賽", "敗者"
                                     ] = str(loser_1)
                                     save_finals(df_finals)
                                     st.rerun()
                             else:
-                                st.write(
-                                    f"勝者：`{p1_w if p1_w else '未決定'}`"
-                                )
+                                st.write(f"勝者：`{p1_w if p1_w else '未決定'}`")
                         else:
                             st.info("⏳ 等待準決賽兩場結果出爐...")
 
