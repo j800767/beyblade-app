@@ -122,7 +122,7 @@ def calculate_swiss_standings():
     return wins, losses, sos, h2h, played_pairs, ranked_ids, bye_players
 
 def generate_next_round_pairs(current_round):
-    """【修正防重複對戰演算法】採用迴溯法 (Backtracking) 進行全域防重複對戰配對"""
+    """採用迴溯法 (Backtracking) 進行全域防重複對戰配對"""
     wins, losses, _, _, played_pairs, ranked_ids, bye_players = calculate_swiss_standings()
     
     # 選擇本次輪空的選手 (優先挑選戰績最低且未輪空過的選手)
@@ -134,7 +134,6 @@ def generate_next_round_pairs(current_round):
 
     active_players = [p for p in ranked_ids if p != bye_candidate]
 
-    # 使用 Backtracking (迴溯法) 尋找不重複對戰的最佳配對
     def backtrack_pairings(candidates):
         if not candidates:
             return []
@@ -152,7 +151,7 @@ def generate_next_round_pairs(current_round):
 
     new_pairs = backtrack_pairings(active_players)
 
-    # 備用機制：若極端狀況下無法完全避開重複，則退回預設強行配對
+    # 備用機制
     if new_pairs is None:
         new_pairs = []
         temp_pool = list(active_players)
@@ -174,7 +173,6 @@ def generate_next_round_pairs(current_round):
             "勝者_編號": 0
         })
     
-    # 加入輪空場次
     if bye_candidate is not None:
         match_data.append({
             "輪次": current_round,
@@ -187,7 +185,7 @@ def generate_next_round_pairs(current_round):
     return match_data
 
 # ==========================================
-# 3. 團體賽資料存取與計算 (修正三方/多方平手問題)
+# 3. 團體賽資料存取與計算
 # ==========================================
 def load_team_players():
     if os.path.exists(TEAM_DATA_FILE):
@@ -264,35 +262,37 @@ if st.session_state["is_admin"]:
 is_admin = st.session_state["is_admin"]
 
 # ==========================================
-# 5. 通用 PK 加賽渲染模組 (個人賽)
+# 5. 通用 PK 加賽渲染模組 (方案 B：支援 2~N 人平手 PK)
 # ==========================================
 def render_pk_section(rank_target, candidates, player_map):
-    st.error(f"⚠️ 觸發 PK 加賽條款！第 {rank_target} 名門檻出現完全同分：{', '.join([f'{p}號 {player_map[p]}' for p in candidates])}")
+    st.error(f"⚠️ 觸發 PK 加賽條款！第 {rank_target} 名門檻出現勝場同分 ({len(candidates)}人)：" + 
+             ", ".join([f"{p}號 {player_map[p]}" for p in candidates]))
     st.info("📌 **PK 賽規則**：1 顆陀螺不換零件，進行【一分定勝負】單淘汰賽。")
 
     num_c = len(candidates)
     if num_c == 2:
-        if is_admin:
-            chosen = st.selectbox(f"選擇爭奪第 {rank_target} 名 PK 勝出的選手：", candidates, format_func=lambda x: f"{x}號 {player_map[x]}", key=f"pk_sel_2_{rank_target}")
-            if st.button(f"確定第 {rank_target} 名 PK 晉級者", key=f"btn_pk_2_{rank_target}", type="primary"):
-                st.session_state[f"selected_rank_{rank_target}"] = chosen
-                st.rerun()
-        else:
-            st.warning("等待管理員進行 PK 加賽裁決...")
-
+        st.markdown("👉 請進行 **1 對 1 一分定勝負** PK 賽。")
     elif num_c == 3:
-        st.markdown("1. 盲抽 1 人輪空。<br>2. 另外兩人打 1 場加賽，勝者與輪空者打 PK 決賽！", unsafe_allow_html=True)
-        if is_admin:
-            col_p1, col_p2 = st.columns(2)
-            with col_p1:
-                p_win1 = st.selectbox("第一輪 PK 勝者：", candidates, format_func=lambda x: f"{x}號 {player_map[x]}", key=f"pk_sel_3_r1_{rank_target}")
-            with col_p2:
-                chosen = st.selectbox(f"【PK 決賽】最終勝者：", candidates, format_func=lambda x: f"{x}號 {player_map[x]}", key=f"pk_sel_3_fin_{rank_target}")
-            if st.button(f"確定第 {rank_target} 名 PK 晉級者", key=f"btn_pk_3_{rank_target}", type="primary"):
-                st.session_state[f"selected_rank_{rank_target}"] = chosen
-                st.rerun()
-        else:
-            st.warning("等待管理員進行 PK 加賽裁決...")
+        st.markdown("👉 **建議流程**：盲抽 1 人輪空，另外兩人打 1 場 PK，勝者與輪空者打 PK 決賽！")
+    elif num_c == 4:
+        st.markdown("👉 **建議流程**：盲抽分成兩組打準決賽（A vs B、C vs D），兩組勝者再打 PK 決賽！")
+    else:
+        st.markdown(f"👉 請進行 **{num_c} 人單淘汰 PK 賽** 決出最終晉級者。")
+
+    st.write("---")
+    
+    if is_admin:
+        chosen = st.selectbox(
+            f"🏆 請點選【PK 加賽最終勝出者（取得第 {rank_target} 名晉級）】：", 
+            candidates, 
+            format_func=lambda x: f"{x}號 {player_map[x]}", 
+            key=f"pk_sel_gen_{rank_target}"
+        )
+        if st.button(f"確定由 {chosen}號 {player_map[chosen]} 晉級四強決賽", key=f"btn_pk_gen_{rank_target}", type="primary"):
+            st.session_state[f"selected_rank_{rank_target}"] = chosen
+            st.rerun()
+    else:
+        st.warning("⏳ 等待管理員進行 PK 加賽裁決並登錄結果...")
 
 # ==========================================
 # 6. 主頁面：個人賽與團體賽切換
@@ -492,7 +492,7 @@ with main_tab2:
             st.table(t_table)
 
 # ==========================================
-# 👤 個人賽主區塊 (11人 5輪瑞士輪 + 指定第1輪輪空)
+# 👤 個人賽主區塊 (11人 5輪瑞士輪 + 方案B 純勝場PK)
 # ==========================================
 with main_tab1:
     st.title("💥 9/12 第三屆 三重盃戰鬥陀螺大賽 - 個人賽")
@@ -585,7 +585,6 @@ with main_tab1:
                             "勝者_編號": 0
                         })
                     
-                    # 11 號 (指定輪空者) 直接自動記 1 勝
                     round1_matches.append({
                         "輪次": 1,
                         "組別標籤": "輪空區 (BYE)",
@@ -699,7 +698,7 @@ with main_tab1:
                     })
                 st.dataframe(pd.DataFrame(disp), use_container_width=True, hide_index=True)
 
-    # --- Tab 4: 決賽 (四強單淘汰) ---
+    # --- Tab 4: 決賽 (四強單淘汰 - 方案 B 純勝場 PK) ---
     with tab4:
         st.header("🏆 個人賽 四強單淘汰決賽")
         total_swiss_matches = len(df_swiss) if df_swiss is not None else 0
@@ -710,19 +709,23 @@ with main_tab1:
         else:
             wins, losses, sos, h2h, played_pairs, ranked_ids, bye_players = calculate_swiss_standings()
 
-            # 檢查第 4 名門檻平手
-            top4_ids = ranked_ids[:4]
-            cut_win = wins[ranked_ids[3]]
-            candidates_for_cut = [p for p in ranked_ids if wins[p] == cut_win]
+            # --- 方案 B 純勝場 PK 邏輯 ---
+            p4_win = wins[ranked_ids[3]]
+            candidates_for_cut = [p for p in ranked_ids if wins[p] == p4_win]
+            higher_rank_players = [p for p in ranked_ids if wins[p] > p4_win]
 
-            need_pk_for_4th = len(candidates_for_cut) > 1 and not set(candidates_for_cut).issubset(set(top4_ids))
+            spots_left = 4 - len(higher_rank_players)
+            need_pk_for_4th = len(candidates_for_cut) > spots_left
 
-            if need_pk_for_4th and f"selected_rank_4" not in st.session_state:
+            if need_pk_for_4th and "selected_rank_4" not in st.session_state:
                 render_pk_section(4, candidates_for_cut, player_map)
             else:
-                if f"selected_rank_4" in st.session_state:
-                    chosen_4 = st.session_state[f"selected_rank_4"]
-                    top4_ids = [p for p in ranked_ids if p != chosen_4 and p in ranked_ids[:3]] + [chosen_4]
+                if "selected_rank_4" in st.session_state:
+                    chosen_4 = st.session_state["selected_rank_4"]
+                    top4_ids = higher_rank_players + [p for p in candidates_for_cut if p == chosen_4]
+                    top4_ids = top4_ids[:4]
+                else:
+                    top4_ids = ranked_ids[:4]
 
                 if df_finals is None:
                     init_finals = [
@@ -753,10 +756,9 @@ with main_tab1:
                                 df_finals.at[idx, "勝者"] = str(p1)
                                 df_finals.at[idx, "敗者"] = str(p2)
 
-                                # 自動推進準決賽結果至決賽/季軍賽
                                 if stage == "準決賽 1":
-                                    df_finals.at[2, "選手1"] = str(p2) # 敗者進季軍賽
-                                    df_finals.at[3, "選手1"] = str(p1) # 勝者進冠軍賽
+                                    df_finals.at[2, "選手1"] = str(p2)
+                                    df_finals.at[3, "選手1"] = str(p1)
                                 elif stage == "準決賽 2":
                                     df_finals.at[2, "選手2"] = str(p2)
                                     df_finals.at[3, "選手2"] = str(p1)
