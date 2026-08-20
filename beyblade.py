@@ -332,7 +332,7 @@ def render_pk_section(
 ):
     st.error(
         f"⚠️ 觸發 PK 加賽條款！第 {rank_target} 名門檻出現完全同分："
-        f" {', '.join([f'{p}號 {player_map.get(p, Exhaustive)}' for p in candidates])}"
+        f" {', '.join([f'{p}號 {player_map.get(p, \"\")}' for p in candidates])}"
     )
     st.info(
         "📌 **PK 賽規則**：1 顆陀螺不換零件，進行【一分定勝負】單淘汰賽。"
@@ -1060,7 +1060,7 @@ with main_tab1:
 
                 st.success(
                     "🎉 預賽晉級四強名單："
-                    f" {', '.join([f'{p}號 {player_map.get(p, Exhaustive)}' for p in final_4])}"
+                    f" {', '.join([f'{p}號 {player_map.get(p, \"\")}' for p in final_4])}"
                 )
 
                 if is_admin:
