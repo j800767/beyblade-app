@@ -332,7 +332,7 @@ def render_pk_section(
 ):
     st.error(
         f"⚠️ 觸發 PK 加賽條款！第 {rank_target} 名門檻出現完全同分："
-        f" {', '.join([f'{p}號 {player_map.get(p, \"\")}' for p in candidates])}"
+        f" {', '.join([f'{p}號 {player_map.get(p, StandardError)}' for p in candidates])}"
     )
     st.info(
         "📌 **PK 賽規則**：1 顆陀螺不換零件，進行【一分定勝負】單淘汰賽。"
@@ -1021,7 +1021,7 @@ with main_tab1:
                     hide_index=True,
                 )
 
-    # --- Tab 4: 決賽 (修正準決賽連動與勝負更新問題) ---
+    # --- Tab 4: 決賽 ---
     with tab4:
         st.header("🏆 四強單淘汰決賽 (晉級者全隨機抽籤)")
         total_p = (
@@ -1060,7 +1060,7 @@ with main_tab1:
 
                 st.success(
                     "🎉 預賽晉級四強名單："
-                    f" {', '.join([f'{p}號 {player_map.get(p, \"\")}' for p in final_4])}"
+                    f" {', '.join([f'{p}號 {player_map.get(p, StandardError)}' for p in final_4])}"
                 )
 
                 if is_admin:
@@ -1171,7 +1171,6 @@ with main_tab1:
                                     df_finals["階段"] == "準決賽A", "敗者"
                                 ] = str(loser_a)
 
-                                # 同時更新決賽與季軍賽對戰名單
                                 sf_b_l = df_finals.loc[
                                     df_finals["階段"] == "準決賽B", "敗者"
                                 ].values[0]
@@ -1228,7 +1227,6 @@ with main_tab1:
                                     df_finals["階段"] == "準決賽B", "敗者"
                                 ] = str(loser_b)
 
-                                # 同時更新決賽與季軍賽對戰名單
                                 sf_a_l = df_finals.loc[
                                     df_finals["階段"] == "準決賽A", "敗者"
                                 ].values[0]
