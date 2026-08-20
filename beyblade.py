@@ -1022,7 +1022,7 @@ with main_tab1:
                     hide_index=True,
                 )
 
-    # --- Tab 4: 決賽 ---
+  # --- Tab 4: 決賽 ---
     with tab4:
         st.header("🏆 四強單淘汰決賽 (晉級者全隨機抽籤)")
         total_p = (
@@ -1065,64 +1065,62 @@ with main_tab1:
                     f" {', '.join(final_4_names)}"
                 )
 
+                # 抽籤控制按鈕 (僅管理員或已抽籤狀態顯示)
                 if is_admin:
-                    col_draw, col_info_draw = st.columns([1.5, 3])
-                    with col_draw:
-                        draw_btn_text = (
-                            "🎲 進行四強隨機抽籤 / 重新對調"
-                            if df_finals is not None
-                            else "🎲 進行四強隨機抽籤"
-                        )
-                        if st.button(
-                            draw_btn_text,
-                            type="primary",
-                            use_container_width=True,
-                        ):
-                            shuffled_4 = final_4.copy()
-                            random.shuffle(shuffled_4)
-
-                            s1, s2, s3, s4 = shuffled_4[:4]
-                            finals_data = [
-                                {
-                                    "階段": "準決賽A",
-                                    "選手1": str(player_map.get(s1, '')),
-                                    "選手2": str(player_map.get(s2, '')),
-                                    "勝者": "",
-                                    "敗者": "",
-                                },
-                                {
-                                    "階段": "準決賽B",
-                                    "選手1": str(player_map.get(s3, '')),
-                                    "選手2": str(player_map.get(s4, '')),
-                                    "勝者": "",
-                                    "敗者": "",
-                                },
-                                {
-                                    "階段": "季軍賽",
-                                    "選手1": "待定",
-                                    "選手2": "待定",
-                                    "勝者": "",
-                                    "敗者": "",
-                                },
-                                {
-                                    "階段": "冠軍賽",
-                                    "選手1": "待定",
-                                    "選手2": "待定",
-                                    "勝者": "",
-                                    "敗者": "",
-                                },
-                            ]
-                            df_finals = pd.DataFrame(finals_data)
-                            save_finals(df_finals)
-                            st.toast("🎲 四強隨機配對完成！")
-                            st.rerun()
-
-                if df_finals is None:
-                    st.info(
-                        "💡 預賽已結束！請管理員點擊上方【🎲"
-                        " 進行四強隨機抽籤】進行準決賽配對。"
+                    draw_btn_text = (
+                        "🎲 進行四強隨機抽籤 / 重新對調"
+                        if df_finals is not None
+                        else "🎲 進行四強隨機抽籤"
                     )
+                    if st.button(
+                        draw_btn_text,
+                        type="primary",
+                        use_container_width=False,
+                    ):
+                        shuffled_4 = final_4.copy()
+                        random.shuffle(shuffled_4)
+
+                        s1, s2, s3, s4 = shuffled_4[:4]
+                        finals_data = [
+                            {
+                                "階段": "準決賽A",
+                                "選手1": str(player_map.get(s1, '')),
+                                "選手2": str(player_map.get(s2, '')),
+                                "勝者": "",
+                                "敗者": "",
+                            },
+                            {
+                                "階段": "準決賽B",
+                                "選手1": str(player_map.get(s3, '')),
+                                "選手2": str(player_map.get(s4, '')),
+                                "勝者": "",
+                                "敗者": "",
+                            },
+                            {
+                                "階段": "季軍賽",
+                                "選手1": "待定",
+                                "選手2": "待定",
+                                "勝者": "",
+                                "敗者": "",
+                            },
+                            {
+                                "階段": "冠軍賽",
+                                "選手1": "待定",
+                                "選手2": "待定",
+                                "勝者": "",
+                                "敗者": "",
+                            },
+                        ]
+                        df_finals = pd.DataFrame(finals_data)
+                        save_finals(df_finals)
+                        st.toast("🎲 四強隨機配對完成！")
+                        st.rerun()
+
+                # 未抽籤時：顯示提示，不渲染下方對戰組合
+                if df_finals is None:
+                    st.info("💡 請點擊上方【🎲 進行四強隨機抽籤】按鈕以產生對戰組合！")
                 else:
+                    # 已抽籤：渲染對戰組合與控制項
                     for col in ["階段", "選手1", "選手2", "勝者", "敗者"]:
                         df_finals[col] = df_finals[col].astype(str)
 
