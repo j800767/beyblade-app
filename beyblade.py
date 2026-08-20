@@ -91,7 +91,7 @@ def calculate_swiss_standings():
                 if p1 != 0:
                     wins[p1] += 1[cite: 2]
                     bye_players.add(p1)[cite: 2]
-                continue[cite: 2]
+                continue
 
             if p1 != 0 and p2 != 0:
                 played_pairs.add(tuple(sorted([p1, p2])))[cite: 2]
