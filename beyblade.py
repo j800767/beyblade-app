@@ -330,9 +330,10 @@ is_admin = st.session_state["is_admin"]
 def render_pk_section(
     rank_target: int, candidates: List[int], player_map: Dict[int, str]
 ):
+    c_names = [f"{p}號 {player_map.get(p, '')}" for p in candidates]
     st.error(
         f"⚠️ 觸發 PK 加賽條款！第 {rank_target} 名門檻出現完全同分："
-        f" {', '.join([f'{p}號 {player_map.get(p, StandardError)}' for p in candidates])}"
+        f" {', '.join(c_names)}"
     )
     st.info(
         "📌 **PK 賽規則**：1 顆陀螺不換零件，進行【一分定勝負】單淘汰賽。"
@@ -1058,9 +1059,10 @@ with main_tab1:
                     else:
                         final_4.append(ranked_ids[r_idx])
 
+                final_4_names = [f"{p}號 {player_map.get(p, '')}" for p in final_4]
                 st.success(
                     "🎉 預賽晉級四強名單："
-                    f" {', '.join([f'{p}號 {player_map.get(p, StandardError)}' for p in final_4])}"
+                    f" {', '.join(final_4_names)}"
                 )
 
                 if is_admin:
@@ -1083,15 +1085,15 @@ with main_tab1:
                             finals_data = [
                                 {
                                     "階段": "準決賽A",
-                                    "選手1": str(player_map[s1]),
-                                    "選手2": str(player_map[s2]),
+                                    "選手1": str(player_map.get(s1, '')),
+                                    "選手2": str(player_map.get(s2, '')),
                                     "勝者": "",
                                     "敗者": "",
                                 },
                                 {
                                     "階段": "準決賽B",
-                                    "選手1": str(player_map[s3]),
-                                    "選手2": str(player_map[s4]),
+                                    "選手1": str(player_map.get(s3, '')),
+                                    "選手2": str(player_map.get(s4, '')),
                                     "勝者": "",
                                     "敗者": "",
                                 },
