@@ -325,7 +325,7 @@ is_admin = st.session_state["is_admin"]
 
 
 # ==========================================
-# 5. 通用 PK 加賽渲染模組 (個人賽 - 支持動態爭奪席位)
+# 5. 通用 PK 加賽渲染模組 (個人賽 - 全狀況支援)
 # ==========================================
 def render_pk_section(
     tied_players: List[int],
@@ -345,19 +345,24 @@ def render_pk_section(
 
     num_c = len(tied_players)
 
-    # 情況 A：爭奪 1 個名額 (例如：N 搶 1)
+    # ---------------------------------------------------------
+    # 狀況 A：爭奪 1 個席位 (例如：第 4 名出現同分)
+    # ---------------------------------------------------------
     if spots_needed == 1:
         if num_c == 2:
+            st.markdown(
+                "**2 搶 1 機制**：兩位同分選手進行 1 場 PK 對決，勝者取得四強資格！"
+            )
             if is_admin:
                 chosen = st.selectbox(
-                    f"選擇 PK 勝出晉級四強（第 4 名）的選手：",
+                    "選擇 PK 勝出晉級四強（第 4 名）的選手：",
                     tied_players,
                     format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
-                    key="pk_sel_2_1",
+                    key="pk_sel_21",
                 )
                 if st.button(
                     "確定第 4 名 PK 晉級者",
-                    key="btn_pk_2_1",
+                    key="btn_pk_21",
                     type="primary",
                 ):
                     st.session_state["selected_rank_4"] = chosen
@@ -367,8 +372,9 @@ def render_pk_section(
 
         elif num_c == 3:
             st.markdown(
-                "1. 盲抽 1 人輪空。<br>2. 另外兩人打 1 場加賽，勝者與輪空者打 PK"
-                " 決賽爭奪最後 1 個席位！",
+                "**3 搶 1 機制**：<br>1. 盲抽 1 人輪空。<br>2."
+                " 另外兩人打 1 場加賽，勝者與輪空者打 PK 決賽爭奪最後 1"
+                " 個席位！",
                 unsafe_allow_html=True,
             )
             if is_admin:
@@ -378,18 +384,18 @@ def render_pk_section(
                         "第一輪 PK 勝者：",
                         tied_players,
                         format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
-                        key="pk_sel_3_r1_1",
+                        key="pk_sel_31_r1",
                     )
                 with col_p2:
                     chosen = st.selectbox(
                         "【PK 決賽】最終勝者（第 4 名）：",
                         tied_players,
                         format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
-                        key="pk_sel_3_fin_1",
+                        key="pk_sel_31_fin",
                     )
                 if st.button(
                     "確定第 4 名 PK 晉級者",
-                    key="btn_pk_3_1",
+                    key="btn_pk_31",
                     type="primary",
                 ):
                     st.session_state["selected_rank_4"] = chosen
@@ -397,7 +403,50 @@ def render_pk_section(
             else:
                 st.warning("等待管理員進行 PK 加賽裁決...")
 
-    # 情況 B：爭奪 2 個名額 (例如：3 人爭奪第 3、4 名)
+        elif num_c >= 4:
+            st.markdown(
+                f"**{num_c} 搶 1 機制**：<br>1. 4 人抽籤兩兩進行 PK 對決。<br>2."
+                " 兩場獲勝者再打 1 場決賽，勝者取得四強資格！",
+                unsafe_allow_html=True,
+            )
+            if is_admin:
+                col_m1, col_m2, col_fin = st.columns(3)
+                with col_m1:
+                    w1 = st.selectbox(
+                        "對局 A 勝者：",
+                        tied_players,
+                        format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
+                        key="pk_sel_41_w1",
+                    )
+                with col_m2:
+                    rem_players = [p for p in tied_players if p != w1]
+                    w2 = st.selectbox(
+                        "對局 B 勝者：",
+                        rem_players,
+                        format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
+                        key="pk_sel_41_w2",
+                    )
+                with col_fin:
+                    fin_w = st.selectbox(
+                        "【PK 決賽】最終勝者（第 4 名）：",
+                        [w1, w2],
+                        format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
+                        key="pk_sel_41_fin",
+                    )
+
+                if st.button(
+                    "確定第 4 名 PK 晉級者",
+                    key="btn_pk_41",
+                    type="primary",
+                ):
+                    st.session_state["selected_rank_4"] = fin_w
+                    st.rerun()
+            else:
+                st.warning("等待管理員進行 PK 加賽裁決...")
+
+    # ---------------------------------------------------------
+    # 狀況 B：爭奪 2 個席位 (例如：第 3、4 名出現同分)
+    # ---------------------------------------------------------
     elif spots_needed == 2:
         if num_c == 3:
             st.markdown(
@@ -409,7 +458,7 @@ def render_pk_section(
                 col_bye, col_match = st.columns(2)
                 with col_bye:
                     bye_p = st.selectbox(
-                        "盲抽輪空（直通晉級）者：",
+                        "盲抽輪空（直通晉級第 3 名）者：",
                         tied_players,
                         format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
                         key="pk_sel_32_bye",
@@ -417,7 +466,7 @@ def render_pk_section(
                 with col_match:
                     rem_players = [p for p in tied_players if p != bye_p]
                     match_w = st.selectbox(
-                        "另外兩人 PK 對決勝者：",
+                        "另外兩人 PK 對決勝者（第 4 名）：",
                         rem_players,
                         format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
                         key="pk_sel_32_match",
@@ -428,8 +477,170 @@ def render_pk_section(
                     key="btn_pk_32",
                     type="primary",
                 ):
-                    st.session_state["selected_rank_3"] = bye_p
-                    st.session_state["selected_rank_4"] = match_w
+                    st.session_state[f"selected_rank_{start_rank}"] = bye_p
+                    st.session_state[f"selected_rank_{start_rank+1}"] = match_w
+                    st.rerun()
+            else:
+                st.warning("等待管理員進行 PK 加賽裁決...")
+
+        elif num_c == 4:
+            st.markdown(
+                "**4 搶 2 機制**：<br>1. 4 人抽籤對決（兩兩 PK，一分定勝負）。<br>2."
+                " **兩場對決的勝者直接取得四強晉級資格**！",
+                unsafe_allow_html=True,
+            )
+            if is_admin:
+                col_m1, col_m2 = st.columns(2)
+                with col_m1:
+                    w1 = st.selectbox(
+                        "對局 A 勝者（晉級第 3 名）：",
+                        tied_players,
+                        format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
+                        key="pk_sel_42_w1",
+                    )
+                with col_m2:
+                    rem_players = [p for p in tied_players if p != w1]
+                    w2 = st.selectbox(
+                        "對局 B 勝者（晉級第 4 名）：",
+                        rem_players,
+                        format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
+                        key="pk_sel_42_w2",
+                    )
+
+                if st.button(
+                    "確定四強 PK 晉級兩名選手",
+                    key="btn_pk_42",
+                    type="primary",
+                ):
+                    st.session_state[f"selected_rank_{start_rank}"] = w1
+                    st.session_state[f"selected_rank_{start_rank+1}"] = w2
+                    st.rerun()
+            else:
+                st.warning("等待管理員進行 PK 加賽裁決...")
+
+        elif num_c >= 5:
+            st.markdown(
+                f"**{num_c} 搶 2 機制**：<br>1. 1 人抽籤直通輪空，其餘 4 人分成兩組對決。<br>2."
+                " 三位勝者再進行 3 搶 2 輪空賽，選出最後晉級的 2 人。",
+                unsafe_allow_html=True,
+            )
+            if is_admin:
+                col_m1, col_m2 = st.columns(2)
+                with col_m1:
+                    w1 = st.selectbox(
+                        "PK 晉級選手 1（第 3 名）：",
+                        tied_players,
+                        format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
+                        key="pk_sel_52_w1",
+                    )
+                with col_m2:
+                    rem_players = [p for p in tied_players if p != w1]
+                    w2 = st.selectbox(
+                        "PK 晉級選手 2（第 4 名）：",
+                        rem_players,
+                        format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
+                        key="pk_sel_52_w2",
+                    )
+
+                if st.button(
+                    "確定四強 PK 晉級兩名選手",
+                    key="btn_pk_52",
+                    type="primary",
+                ):
+                    st.session_state[f"selected_rank_{start_rank}"] = w1
+                    st.session_state[f"selected_rank_{start_rank+1}"] = w2
+                    st.rerun()
+            else:
+                st.warning("等待管理員進行 PK 加賽裁決...")
+
+    # ---------------------------------------------------------
+    # 狀況 C：爭奪 3 個席位 (例如：第 2、3、4 名出現同分)
+    # ---------------------------------------------------------
+    elif spots_needed == 3:
+        if num_c == 4:
+            st.markdown(
+                "**4 搶 3 機制**：<br>1. 1 人抽籤盲抽輪空（直通晉級）。<br>2."
+                " 其餘 3 人進行 3 搶 2 機制，選出最後 3 名晉級者！",
+                unsafe_allow_html=True,
+            )
+            if is_admin:
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    w1 = st.selectbox(
+                        "晉級者 1（第 2 名）：",
+                        tied_players,
+                        format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
+                        key="pk_sel_43_w1",
+                    )
+                with col2:
+                    rem1 = [p for p in tied_players if p != w1]
+                    w2 = st.selectbox(
+                        "晉級者 2（第 3 名）：",
+                        rem1,
+                        format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
+                        key="pk_sel_43_w2",
+                    )
+                with col3:
+                    rem2 = [p for p in tied_players if p not in [w1, w2]]
+                    w3 = st.selectbox(
+                        "晉級者 3（第 4 名）：",
+                        rem2,
+                        format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
+                        key="pk_sel_43_w3",
+                    )
+
+                if st.button(
+                    "確定四強 PK 晉級三名選手",
+                    key="btn_pk_43",
+                    type="primary",
+                ):
+                    st.session_state[f"selected_rank_{start_rank}"] = w1
+                    st.session_state[f"selected_rank_{start_rank+1}"] = w2
+                    st.session_state[f"selected_rank_{start_rank+2}"] = w3
+                    st.rerun()
+            else:
+                st.warning("等待管理員進行 PK 加賽裁決...")
+
+        elif num_c >= 5:
+            st.markdown(
+                f"**{num_c} 搶 3 機制**：<br>1. 抽籤進行兩兩 PK 對決。<br>2."
+                " 勝者直接取得晉級資格。",
+                unsafe_allow_html=True,
+            )
+            if is_admin:
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    w1 = st.selectbox(
+                        "晉級者 1：",
+                        tied_players,
+                        format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
+                        key="pk_sel_53_w1",
+                    )
+                with col2:
+                    rem1 = [p for p in tied_players if p != w1]
+                    w2 = st.selectbox(
+                        "晉級者 2：",
+                        rem1,
+                        format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
+                        key="pk_sel_53_w2",
+                    )
+                with col3:
+                    rem2 = [p for p in tied_players if p not in [w1, w2]]
+                    w3 = st.selectbox(
+                        "晉級者 3：",
+                        rem2,
+                        format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
+                        key="pk_sel_53_w3",
+                    )
+
+                if st.button(
+                    "確定四強 PK 晉級三名選手",
+                    key="btn_pk_53",
+                    type="primary",
+                ):
+                    st.session_state[f"selected_rank_{start_rank}"] = w1
+                    st.session_state[f"selected_rank_{start_rank+1}"] = w2
+                    st.session_state[f"selected_rank_{start_rank+2}"] = w3
                     st.rerun()
             else:
                 st.warning("等待管理員進行 PK 加賽裁決...")
