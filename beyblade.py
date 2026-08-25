@@ -291,7 +291,7 @@ def calculate_team_standings() -> Tuple[
                 h2h[(t1, t2)] = w
                 h2h[(t2, t1)] = w
 
-    # 排序邏輯：先比勝場；若勝場相同且兩隊有對戰過，比對戰勝負 (H2H)
+    # 排序邏輯：先比勝場；若勝場相同且對戰過，優先比對戰勝負 (H2H)
     def compare_teams(t1: str, t2: str) -> int:
         if t_wins[t1] != t_wins[t2]:
             return 1 if t_wins[t1] > t_wins[t2] else -1
@@ -303,6 +303,7 @@ def calculate_team_standings() -> Tuple[
         TEAM_NAMES, key=cmp_to_key(compare_teams), reverse=True
     )
     return t_wins, t_losses, h2h, ranked_teams
+
 
 # ==========================================
 # 4. 側邊欄與權限控制
@@ -351,9 +352,7 @@ def render_pk_section(
 
     num_c = len(tied_players)
 
-    # ---------------------------------------------------------
     # 狀況 A：爭奪 1 個席位 (例如：第 4 名出現同分)
-    # ---------------------------------------------------------
     if spots_needed == 1:
         target_rank = start_rank + spots_needed - 1
         if num_c == 2:
@@ -399,9 +398,7 @@ def render_pk_section(
             else:
                 st.warning("等待管理員進行 PK 加賽裁決...")
 
-    # ---------------------------------------------------------
     # 狀況 B：爭奪 2 個席位 (例如：第 3、4 名出現同分)
-    # ---------------------------------------------------------
     elif spots_needed == 2:
         if num_c == 3:
             st.markdown(
@@ -469,9 +466,7 @@ def render_pk_section(
             else:
                 st.warning("等待管理員進行 PK 加賽裁決...")
 
-    # ---------------------------------------------------------
     # 狀況 C：爭奪 3 個席位 (例如：第 2、3、4 名出現同分)
-    # ---------------------------------------------------------
     elif spots_needed == 3:
         if is_admin:
             col1, col2, col3 = st.columns(3)
@@ -662,7 +657,8 @@ with main_tab2:
                 else:
                     st.write(f"比賽結果：`{w_team}`")
                 st.write("---")
-with t_tab3:
+
+    with t_tab3:
         st.header("🏆 團體賽 冠亞軍決賽")
         completed_tm = (
             sum(1 for w in df_team_m["勝隊"] if w in TEAM_NAMES)
@@ -758,6 +754,7 @@ with t_tab3:
                     * 🥇 **總冠軍**：{champ}
                     * 🥈 **亞軍**：{runner_t}
                     """)
+
     with t_tab4:
         st.header("📊 團體賽即時積分榜")
         if df_team_m is not None:
