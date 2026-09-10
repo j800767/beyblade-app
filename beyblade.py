@@ -420,6 +420,8 @@ with main_tab2:
                 save_team_finals(None)
                 st.session_state.pop("selected_team_rank_1", None)
                 st.session_state.pop("selected_team_rank_2", None)
+                st.session_state.pop("pk_team_sel_1_dynamic", None)
+                st.session_state.pop("pk_team_sel_2_dynamic", None)
                 st.success("🎉 團體賽 10 場單循環賽程生成完畢！")
                 st.rerun()
         else:
@@ -1143,7 +1145,7 @@ with main_tab1:
                                 df_finals["階段"] == "準決賽A", "敗者"
                             ] = str(loser_a)
 
-                            # 重置後續冠/季軍賽的舊勝負狀態，避免名單錯亂
+                            # 重置後續冠/季軍賽的舊勝負狀態，避免改選時殘留舊數據
                             df_finals.loc[df_finals["階段"] == "季軍賽", "勝者"] = ""
                             df_finals.loc[df_finals["階段"] == "季軍賽", "敗者"] = ""
                             df_finals.loc[df_finals["階段"] == "冠軍賽", "勝者"] = ""
@@ -1203,7 +1205,7 @@ with main_tab1:
                                 df_finals["階段"] == "準決賽B", "敗者"
                             ] = str(loser_b)
 
-                            # 重置後續冠/季軍賽的舊勝負狀態，避免名單錯亂
+                            # 重置後續冠/季軍賽的舊勝負狀態，避免改選時殘留舊數據
                             df_finals.loc[df_finals["階段"] == "季軍賽", "勝者"] = ""
                             df_finals.loc[df_finals["階段"] == "季軍賽", "敗者"] = ""
                             df_finals.loc[df_finals["階段"] == "冠軍賽", "勝者"] = ""
