@@ -694,6 +694,7 @@ with main_tab2:
                     )
                     if st.button("確定團體賽第 2 名晉級者", type="primary"):
                         st.session_state["selected_team_rank_2"] = chosen_t2
+                        save_team_finals(None)
                         st.rerun()
                 else:
                     st.warning("等待管理員進行 PK 加賽裁決...")
@@ -705,7 +706,7 @@ with main_tab2:
                     "selected_team_rank_2", ranked_teams[1]
                 )
 
-                if df_team_f is None or df_team_f.empty:
+                if df_team_f is None or df_team_f.empty or df_team_f.iloc[0]["隊伍1"] != final_t1 or df_team_f.iloc[0]["隊伍2"] != final_t2:
                     df_team_f = pd.DataFrame([{
                         "隊伍1": final_t1,
                         "隊伍2": final_t2,
@@ -722,7 +723,7 @@ with main_tab2:
                 )
 
                 if is_admin:
-                    c1, c2 = st.columns([3, 3])
+                    c1, c2, c3 = st.columns([3, 3, 2])
                     with c1:
                         if st.button(
                             f"🎉 判定【{t1_f}】為總冠軍",
@@ -743,6 +744,12 @@ with main_tab2:
                             df_team_f.at[0, "冠軍"] = t2_f
                             save_team_finals(df_team_f)
                             st.rerun()
+                    with c3:
+                        if "selected_team_rank_2" in st.session_state:
+                            if st.button("🔄 重新裁決 PK", type="secondary"):
+                                del st.session_state["selected_team_rank_2"]
+                                save_team_finals(None)
+                                st.rerun()
                 else:
                     st.write(f"總冠軍：`{champ if champ else '比賽中'}`")
 
@@ -1133,13 +1140,19 @@ with main_tab1:
                     tied_with_4th, spots_needed, start_rank, player_map
                 )
             else:
+                # 確保四強名單不重複且順序正確
                 final_4 = []
-                for r_idx in range(4):
-                    stored_key = f"selected_rank_{r_idx + 1}"
-                    if stored_key in st.session_state:
-                        final_4.append(st.session_state[stored_key])
+                for p in ranked_ids:
+                    if len(final_4) >= 4:
+                        break
+                    if p not in tied_with_4th:
+                        final_4.append(p)
                     else:
-                        final_4.append(ranked_ids[r_idx])
+                        for r_idx in range(start_rank, start_rank + spots_needed):
+                            stored_key = f"selected_rank_{r_idx}"
+                            if stored_key in st.session_state and st.session_state[stored_key] not in final_4:
+                                final_4.append(st.session_state[stored_key])
+                final_4 = final_4[:4]
 
                 final_4_names = [
                     f"{p}號 {player_map.get(p, '')}" for p in final_4
