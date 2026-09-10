@@ -398,7 +398,7 @@ def render_pk_section(
             else:
                 st.warning("等待管理員進行 PK 加賽裁決...")
 
-    # 狀況 B：爭奪 2 個席位 (例如：第 3、4 名出現同分)
+    # 狀況 B：爭奪 2 個席位 (例如：第 3、4 名出現同分，或 5 搶 2)
     elif spots_needed == 2:
         if num_c == 3:
             st.markdown(
@@ -435,7 +435,7 @@ def render_pk_section(
 
         elif num_c >= 4:
             st.markdown(
-                f"**{num_c} 搶 2 機制**：經過兩兩 PK 對決，選出兩名晉級四強選手。"
+                f"**{num_c} 搶 2 機制**：經過 PK 對決後，選出兩名晉級四強選手。"
             )
             if is_admin:
                 col_m1, col_m2 = st.columns(2)
@@ -673,40 +673,58 @@ with main_tab2:
         else:
             t_wins, t_losses, h2h, ranked_teams = calculate_team_standings()
 
-            # 找出第 1 名之後，爭奪「第 2 名晉級資格」的所有同勝場隊伍
-            rank1_team = ranked_teams[0]
-            second_place_candidates = [
-                t for t in TEAM_NAMES 
-                if t != rank1_team and t_wins[t] == t_wins[ranked_teams[1]]
-            ]
+            # 找出所有勝場數 >= 第 2 名勝場數的隊伍 (代表涉及前 2 名晉級門檻)
+            rank2_wins = t_wins[ranked_teams[1]]
+            top_candidates = [t for t in TEAM_NAMES if t_wins[t] >= rank2_wins]
 
-            # 情況 1：第 2 名有 2 隊以上同勝場 (包含 3 方互咬)，需要 PK / 手動指定第 2 名
-            if len(second_place_candidates) > 1 and "selected_team_rank_2" not in st.session_state:
-                cand_names = "、".join([f"【{t}】" for t in second_place_candidates])
+            # 情況 A：有多隊同勝場爭奪前 2 名門檻 (例如 3 隊同為 3 勝，爭奪 2 個席位)
+            if len(top_candidates) > 2 and (
+                "selected_team_rank_1" not in st.session_state
+                or "selected_team_rank_2" not in st.session_state
+            ):
+                cand_names = "、".join([f"【{t}】" for t in top_candidates])
                 st.error(
-                    f"⚠️ 團體賽第 2 名晉級門檻出現平手/三方互咬狀況！同為 {t_wins[ranked_teams[1]]} 勝隊伍：{cand_names}"
+                    f"⚠️ 團體賽前 2 名晉級門檻出現平手/三方互咬狀況！同為 {rank2_wins} 勝隊伍：{cand_names}"
                 )
                 if is_admin:
-                    chosen_t2 = st.selectbox(
-                        "請由管理員依 PK 加賽結果，指定【最終第 2 名（晉級冠亞軍賽）】隊伍：",
-                        second_place_candidates,
-                        key="pk_team_sel_2_dynamic",
-                    )
-                    if st.button("確定團體賽第 2 名晉級者", type="primary"):
+                    col_t1, col_t2 = st.columns(2)
+                    with col_t1:
+                        chosen_t1 = st.selectbox(
+                            "請指定 PK 勝出之【第 1 名】隊伍：",
+                            top_candidates,
+                            key="pk_team_sel_1_dynamic",
+                        )
+                    with col_t2:
+                        rem_cand = [t for t in top_candidates if t != chosen_t1]
+                        chosen_t2 = st.selectbox(
+                            "請指定 PK 勝出之【第 2 名】隊伍：",
+                            rem_cand,
+                            key="pk_team_sel_2_dynamic",
+                        )
+
+                    if st.button("確定團體賽 PK 晉級冠亞軍隊伍", type="primary"):
+                        st.session_state["selected_team_rank_1"] = chosen_t1
                         st.session_state["selected_team_rank_2"] = chosen_t2
                         save_team_finals(None)
                         st.rerun()
                 else:
                     st.warning("等待管理員進行 PK 加賽裁決...")
 
-            # 情況 2：無同分，或管理員已完成指定
+            # 情況 B：無多隊同分狀況，或管理員已手動指定完畢
             else:
-                final_t1 = rank1_team
+                final_t1 = st.session_state.get(
+                    "selected_team_rank_1", ranked_teams[0]
+                )
                 final_t2 = st.session_state.get(
                     "selected_team_rank_2", ranked_teams[1]
                 )
 
-                if df_team_f is None or df_team_f.empty or df_team_f.iloc[0]["隊伍1"] != final_t1 or df_team_f.iloc[0]["隊伍2"] != final_t2:
+                if (
+                    df_team_f is None
+                    or df_team_f.empty
+                    or df_team_f.iloc[0]["隊伍1"] != final_t1
+                    or df_team_f.iloc[0]["隊伍2"] != final_t2
+                ):
                     df_team_f = pd.DataFrame([{
                         "隊伍1": final_t1,
                         "隊伍2": final_t2,
@@ -745,9 +763,13 @@ with main_tab2:
                             save_team_finals(df_team_f)
                             st.rerun()
                     with c3:
-                        if "selected_team_rank_2" in st.session_state:
+                        if (
+                            "selected_team_rank_1" in st.session_state
+                            or "selected_team_rank_2" in st.session_state
+                        ):
                             if st.button("🔄 重新裁決 PK", type="secondary"):
-                                del st.session_state["selected_team_rank_2"]
+                                st.session_state.pop("selected_team_rank_1", None)
+                                st.session_state.pop("selected_team_rank_2", None)
                                 save_team_finals(None)
                                 st.rerun()
                 else:
