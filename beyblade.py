@@ -148,7 +148,6 @@ df_team_f = load_team_finals()
 def calculate_swiss_standings() -> Tuple[
     Dict[int, int],
     Dict[int, int],
-    Dict[int, int],
     Dict[Tuple[int, int], int],
     Set[Tuple[int, int]],
     List[int],
@@ -157,7 +156,6 @@ def calculate_swiss_standings() -> Tuple[
     wins = {p_id: 0 for p_id in range(1, 12)}
     losses = {p_id: 0 for p_id in range(1, 12)}
     played_pairs = set()
-    defeated_opponents = {p_id: [] for p_id in range(1, 12)}
     h2h = {}
     bye_players = set()
 
@@ -180,30 +178,25 @@ def calculate_swiss_standings() -> Tuple[
                 l = p2 if w == p1 else p1
                 wins[w] += 1
                 losses[l] += 1
-                defeated_opponents[w].append(l)
                 h2h[(p1, p2)] = w
                 h2h[(p2, p1)] = w
 
-    sos = {
-        p_id: sum(wins[opp] for opp in defeated_opponents[p_id])
-        for p_id in range(1, 12)
-    }
-
+    # 排序邏輯：純比勝場；若勝場相同且有對戰過則比對戰勝負 (H2H)
     def compare_players(p1: int, p2: int) -> int:
         if wins[p1] != wins[p2]:
             return 1 if wins[p1] > wins[p2] else -1
-        if sos[p1] != sos[p2]:
-            return 1 if sos[p1] > sos[p2] else -1
+        if (p1, p2) in h2h:
+            return 1 if h2h[(p1, p2)] == p1 else -1
         return 0
 
     ranked_ids = sorted(
         range(1, 12), key=cmp_to_key(compare_players), reverse=True
     )
-    return wins, losses, sos, h2h, played_pairs, ranked_ids, bye_players
+    return wins, losses, h2h, played_pairs, ranked_ids, bye_players
 
 
 def generate_next_round_pairs(current_round: int) -> List[Dict]:
-    wins, losses, _, _, played_pairs, ranked_ids, bye_players = (
+    wins, losses, _, played_pairs, ranked_ids, bye_players = (
         calculate_swiss_standings()
     )
 
@@ -227,8 +220,7 @@ def generate_next_round_pairs(current_round: int) -> List[Dict]:
         for idx in range(1, len(candidates)):
             p2 = candidates[idx]
             pair = tuple(sorted([p1, p2]))
-            
-            # 嚴格限制：只要過去對戰過，絕對禁止再次配對！
+
             if pair not in played_pairs:
                 remaining = candidates[1:idx] + candidates[idx + 1 :]
                 res = backtrack(remaining)
@@ -239,7 +231,6 @@ def generate_next_round_pairs(current_round: int) -> List[Dict]:
 
     new_pairs = backtrack(active_players)
 
-    # 防呆：若嚴格不重複配對導致無解，則進行相鄰位次貪婪搜尋避開重複
     if new_pairs is None:
         new_pairs = []
         temp_candidates = active_players.copy()
@@ -302,7 +293,6 @@ def calculate_team_standings() -> Tuple[
                 h2h[(t1, t2)] = w
                 h2h[(t2, t1)] = w
 
-    # 排序邏輯：先比勝場；若勝場相同且對戰過，優先比對戰勝負 (H2H)
     def compare_teams(t1: str, t2: str) -> int:
         if t_wins[t1] != t_wins[t2]:
             return 1 if t_wins[t1] > t_wins[t2] else -1
@@ -512,11 +502,9 @@ with main_tab2:
         else:
             t_wins, t_losses, h2h, ranked_teams = calculate_team_standings()
 
-            # 找出所有勝場數 >= 第 2 名勝場數的隊伍 (代表涉及前 2 名晉級門檻)
             rank2_wins = t_wins[ranked_teams[1]]
             top_candidates = [t for t in TEAM_NAMES if t_wins[t] >= rank2_wins]
 
-            # 情況 A：有多隊同勝場爭奪前 2 名門檻 (例如 3 隊同為 3 勝，爭奪 2 個席位)
             if len(top_candidates) > 2 and (
                 "selected_team_rank_1" not in st.session_state
                 or "selected_team_rank_2" not in st.session_state
@@ -549,7 +537,6 @@ with main_tab2:
                 else:
                     st.warning("等待管理員進行 PK 加賽裁決...")
 
-            # 情況 B：無多隊同分狀況，或管理員已手動指定完畢
             else:
                 final_t1 = st.session_state.get(
                     "selected_team_rank_1", ranked_teams[0]
@@ -975,17 +962,16 @@ with main_tab1:
         if df_swiss is None or total_p < 30:  # 5輪 * 6場 = 30場完賽
             st.warning(f"⏳ 預賽尚未完成（已完成 {total_p}/30 場）")
         else:
-            wins, losses, sos, h2h, _, ranked_ids, _ = (
+            wins, losses, h2h, _, ranked_ids, _ = (
                 calculate_swiss_standings()
             )
 
-            # 取得預設前 4 名（依勝場與 SOS 排名）
             default_top4 = ranked_ids[:4]
             
             st.markdown("### 🏆 確定四強晉級名單")
             
             if is_admin:
-                st.caption("💡 系統已依【勝場 + SOS】預設前 4 名。若現場不採計 SOS 或有打 PK 賽，請直接在下方調整選單：")
+                st.caption("💡 系統已依【勝場 + 對戰勝負】預設四強名單。若有打 PK 賽，請直接在下方選單調整勝出者：")
                 
                 col1, col2, col3, col4 = st.columns(4)
                 
@@ -1156,7 +1142,6 @@ with main_tab1:
                                 df_finals["階段"] == "準決賽A", "敗者"
                             ] = str(loser_a)
 
-                            # 重置後續冠/季軍賽勝負，避免歷史舊數據殘留
                             df_finals.loc[df_finals["階段"] == "季軍賽", "勝者"] = ""
                             df_finals.loc[df_finals["階段"] == "季軍賽", "敗者"] = ""
                             df_finals.loc[df_finals["階段"] == "冠軍賽", "勝者"] = ""
@@ -1216,7 +1201,6 @@ with main_tab1:
                                 df_finals["階段"] == "準決賽B", "敗者"
                             ] = str(loser_b)
 
-                            # 重置後續冠/季軍賽勝負，避免歷史舊數據殘留
                             df_finals.loc[df_finals["階段"] == "季軍賽", "勝者"] = ""
                             df_finals.loc[df_finals["階段"] == "季軍賽", "敗者"] = ""
                             df_finals.loc[df_finals["階段"] == "冠軍賽", "勝者"] = ""
@@ -1382,7 +1366,7 @@ with main_tab1:
     with tab5:
         st.header("📊 即時積分榜")
         if df_swiss is not None:
-            wins, losses, sos, h2h, _, ranked_ids, _ = (
+            wins, losses, _, _, ranked_ids, _ = (
                 calculate_swiss_standings()
             )
             table_data = []
@@ -1393,6 +1377,5 @@ with main_tab1:
                     "選手名稱": player_map.get(p_id, ""),
                     "勝場": wins[p_id],
                     "敗場": losses[p_id],
-                    "SOS 對手強度分": sos[p_id],
                 })
             st.table(table_data)
