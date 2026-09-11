@@ -216,7 +216,7 @@ def generate_next_round_pairs(current_round: int) -> List[Dict]:
 
     active_players = [p for p in ranked_ids if p != bye_candidate]
 
-    # 回溯配對，避免發生無解死鎖
+    # 回溯配對演算法：硬性禁止重複對戰
     def backtrack(
         candidates: List[int],
     ) -> Optional[List[Tuple[int, int]]]:
@@ -227,22 +227,33 @@ def generate_next_round_pairs(current_round: int) -> List[Dict]:
         for idx in range(1, len(candidates)):
             p2 = candidates[idx]
             pair = tuple(sorted([p1, p2]))
+            
+            # 嚴格限制：只要過去對戰過，絕對禁止再次配對！
             if pair not in played_pairs:
                 remaining = candidates[1:idx] + candidates[idx + 1 :]
                 res = backtrack(remaining)
                 if res is not None:
                     return [(p1, p2)] + res
 
-        # 如果無法完全不重複對戰，放寬條件容錯
-        for idx in range(1, len(candidates)):
-            p2 = candidates[idx]
-            remaining = candidates[1:idx] + candidates[idx + 1 :]
-            res = backtrack(remaining)
-            if res is not None:
-                return [(p1, p2)] + res
         return None
 
-    new_pairs = backtrack(active_players) or []
+    new_pairs = backtrack(active_players)
+
+    # 防呆：若嚴格不重複配對導致無解，則進行相鄰位次貪婪搜尋避開重複
+    if new_pairs is None:
+        new_pairs = []
+        temp_candidates = active_players.copy()
+        while len(temp_candidates) >= 2:
+            p1 = temp_candidates.pop(0)
+            match_found = False
+            for i, p2 in enumerate(temp_candidates):
+                pair = tuple(sorted([p1, p2]))
+                if pair not in played_pairs:
+                    new_pairs.append((p1, temp_candidates.pop(i)))
+                    match_found = True
+                    break
+            if not match_found:
+                new_pairs.append((p1, temp_candidates.pop(0)))
 
     match_data = []
     for p1, p2 in new_pairs:
@@ -1145,7 +1156,7 @@ with main_tab1:
                                 df_finals["階段"] == "準決賽A", "敗者"
                             ] = str(loser_a)
 
-                            # 重置後續冠/季軍賽的舊勝負狀態，避免改選時殘留舊數據
+                            # 重置後續冠/季軍賽勝負，避免歷史舊數據殘留
                             df_finals.loc[df_finals["階段"] == "季軍賽", "勝者"] = ""
                             df_finals.loc[df_finals["階段"] == "季軍賽", "敗者"] = ""
                             df_finals.loc[df_finals["階段"] == "冠軍賽", "勝者"] = ""
@@ -1205,7 +1216,7 @@ with main_tab1:
                                 df_finals["階段"] == "準決賽B", "敗者"
                             ] = str(loser_b)
 
-                            # 重置後續冠/季軍賽的舊勝負狀態，避免改選時殘留舊數據
+                            # 重置後續冠/季軍賽勝負，避免歷史舊數據殘留
                             df_finals.loc[df_finals["階段"] == "季軍賽", "勝者"] = ""
                             df_finals.loc[df_finals["階段"] == "季軍賽", "敗者"] = ""
                             df_finals.loc[df_finals["階段"] == "冠軍賽", "勝者"] = ""
