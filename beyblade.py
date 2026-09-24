@@ -148,7 +148,7 @@ df_team_f = load_team_finals()
 
 
 # ==========================================
-# 3. 戰績與對戰計算邏輯 (12人完美偶數瑞士輪)
+# 3. 戰績與對戰計算邏輯 (12人 4輪瑞士輪)
 # ==========================================
 def calculate_swiss_standings() -> Tuple[
     Dict[int, int],
@@ -193,7 +193,6 @@ def calculate_swiss_standings() -> Tuple[
 def generate_next_round_pairs(current_round: int) -> List[Dict]:
     wins, losses, _, played_pairs, ranked_ids = calculate_swiss_standings()
 
-    # 回溯法配對，確保同戰績對打且絕不重複對戰
     def backtrack(
         candidates: List[int],
     ) -> Optional[List[Tuple[int, int]]]:
@@ -214,7 +213,6 @@ def generate_next_round_pairs(current_round: int) -> List[Dict]:
 
     new_pairs = backtrack(ranked_ids)
 
-    # 備用防呆搜尋
     if new_pairs is None:
         new_pairs = []
         temp_candidates = ranked_ids.copy()
@@ -311,7 +309,7 @@ is_admin = st.session_state["is_admin"]
 # 5. 主頁面：個人賽與團體賽切換
 # ==========================================
 main_tab1, main_tab2 = st.tabs(
-    ["👤 個人賽 (12人 5輪瑞士輪)", "👥 團體賽 (6組 單循環)"]
+    ["👤 個人賽 (12人 4輪瑞士輪)", "👥 團體賽 (6組 單循環)"]
 )
 
 player_map = (
@@ -319,7 +317,7 @@ player_map = (
 )
 
 # ==========================================
-# 👥 團體賽主區塊 (6組 15場單循環)
+# 👥 團體賽主區塊
 # ==========================================
 with main_tab2:
     st.title("👥 第三屆 三重盃戰鬥陀螺大賽 - 團體賽")
@@ -611,12 +609,12 @@ with main_tab2:
             st.table(t_table)
 
 # ==========================================
-# 👤 個人賽主區塊 (12人 5輪瑞士輪)
+# 👤 個人賽主區塊 (12人 4輪瑞士輪)
 # ==========================================
 with main_tab1:
     st.title("💥 第三屆 三重盃戰鬥陀螺大賽 - 個人賽")
     st.caption(
-        "【個人賽】預賽採 4 分制 | 限定 12 人 5 輪瑞士輪 (每輪 6 場完全無輪空) |"
+        "【個人賽】預賽採 4 分制 | 限定 12 人 4 輪瑞士輪 (每輪 6 場完全無輪空) |"
         " 冠軍獎品：UX-15 鮫鯊狂鱗"
     )
 
@@ -743,7 +741,7 @@ with main_tab1:
 
     # --- Tab 2: 控制台 ---
     with tab2:
-        st.header("⚔️ 預賽：5輪瑞士輪控制台 (常規賽採 4 分制)")
+        st.header("⚔️ 預賽：4輪瑞士輪控制台 (常規賽採 4 分制)")
         if df_swiss is None or (df_reg["編號"] == 0).all():
             st.warning(
                 "⏳ 請先在「選手報名與抽籤」分頁集滿 12 人並完成盲抽！"
@@ -756,7 +754,7 @@ with main_tab1:
             col_header, col_undo = st.columns([3, 1.2])
             with col_header:
                 st.info(
-                    f"### 📍 當前進行：第 {current_max_round} / 5 輪"
+                    f"### 📍 當前進行：第 {current_max_round} / 4 輪"
                     f" (該輪進度：{completed_r_count} / 6 場)"
                 )
             with col_undo:
@@ -828,7 +826,7 @@ with main_tab1:
                 st.write("---")
 
             if is_admin and completed_r_count == 6:
-                if current_max_round < 5:
+                if current_max_round < 4:
                     if st.button(
                         f"🚀 生成第 {current_max_round + 1} 輪對戰",
                         type="primary",
@@ -846,7 +844,7 @@ with main_tab1:
 
     # --- Tab 3: 對戰表 ---
     with tab3:
-        st.header("🗓️ 預賽 5 輪對戰表")
+        st.header("🗓️ 預賽 4 輪對戰表")
         if df_swiss is not None:
             for r in range(1, int(df_swiss["輪次"].max()) + 1):
                 st.subheader(f"🌀 第 {r} 輪")
@@ -882,8 +880,8 @@ with main_tab1:
             if df_swiss is not None
             else 0
         )
-        if df_swiss is None or total_p < 30:  # 5輪 * 6場 = 30場完賽
-            st.warning(f"⏳ 預賽尚未完成（已完成 {total_p}/30 場）")
+        if df_swiss is None or total_p < 24:  # 4輪 * 6場 = 24場完賽
+            st.warning(f"⏳ 預賽尚未完成（已完成 {total_p}/24 場）")
         else:
             wins, losses, h2h, _, ranked_ids = calculate_swiss_standings()
 
