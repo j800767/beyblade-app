@@ -13,17 +13,18 @@ st.set_page_config(
     page_title="第三屆 三重盃 戰鬥陀螺大賽", page_icon="💥", layout="wide"
 )
 
-REG_FILE = "players_registration.csv"
-SWISS_MATCH_FILE = "swiss_matches.csv"
-FINALS_FILE = "finals_matches.csv"
+REG_FILE = "players_registration.csv"  # 個人賽選手名單 (12人)
+SWISS_MATCH_FILE = "swiss_matches.csv"  # 個人賽瑞士輪賽程檔案
+FINALS_FILE = "finals_matches.csv"  # 個人賽四強單淘汰檔案
 
-TEAM_DATA_FILE = "team_players_registration.csv"
-TEAM_MATCH_FILE = "team_matches.csv"
-TEAM_FINALS_FILE = "team_finals_matches.csv"
+TEAM_DATA_FILE = "team_players_registration.csv"  # 團體賽名單檔案 (6組)
+TEAM_MATCH_FILE = "team_matches.csv"  # 團體賽單循環賽程檔案
+TEAM_FINALS_FILE = "team_finals_matches.csv"  # 團體賽冠亞軍決賽檔案
 
-ADMIN_PASSWORD = "admin"
+ADMIN_PASSWORD = "admin"  # 管理員預設密碼
 TEAM_NAMES = ["A組", "B組", "C組", "D組", "E組", "F組"]
 
+# 6 組團體賽單循環固定對戰組合 (共 15 場)
 TEAM_SCHEDULE_15 = [
     ("A組", "B組"),
     ("C組", "D組"),
@@ -44,7 +45,7 @@ TEAM_SCHEDULE_15 = [
 
 
 # ==========================================
-# 2. 資料存取與快取機制
+# 2. 資料存取與快取機制 (Caching & Storage)
 # ==========================================
 @st.cache_data
 def load_registrations() -> pd.DataFrame:
@@ -137,6 +138,7 @@ def save_team_finals(df: Optional[pd.DataFrame]) -> None:
     st.cache_data.clear()
 
 
+# 載入所有資料
 df_reg = load_registrations()
 df_swiss = load_swiss_matches()
 df_finals = load_finals()
@@ -150,19 +152,19 @@ player_map = (
 
 
 # ==========================================
-# 3. 3勝晉級 / 3敗淘汰 戰績與配對核心邏輯
+# 3. 戰績與對戰計算邏輯 (12人 4輪瑞士輪)
 # ==========================================
-def calculate_swiss_cutoff_standings() -> Tuple[
+def calculate_swiss_standings() -> Tuple[
     Dict[int, int],
     Dict[int, int],
-    List[int],
-    List[int],
-    List[int],
+    Dict[Tuple[int, int], int],
     Set[Tuple[int, int]],
+    List[int],
 ]:
     wins = {p_id: 0 for p_id in range(1, 13)}
     losses = {p_id: 0 for p_id in range(1, 13)}
     played_pairs = set()
+    h2h = {}
 
     if df_swiss is not None:
         for _, r in df_swiss.iterrows():
@@ -176,33 +178,24 @@ def calculate_swiss_cutoff_standings() -> Tuple[
                 l = p2 if w == p1 else p1
                 wins[w] += 1
                 losses[l] += 1
+                h2h[(p1, p2)] = w
+                h2h[(p2, p1)] = w
 
-    qualified = []  # 滿 3 勝 (晉級)
-    eliminated = []  # 滿 3 敗 (淘汰)
-    active = []  # 繼續比賽中 (勝<3 且 敗<3)
+    def compare_players(p1: int, p2: int) -> int:
+        if wins[p1] != wins[p2]:
+            return 1 if wins[p1] > wins[p2] else -1
+        if (p1, p2) in h2h:
+            return 1 if h2h[(p1, p2)] == p1 else -1
+        return 0
 
-    for p_id in range(1, 13):
-        if wins[p_id] >= 3:
-            qualified.append(p_id)
-        elif losses[p_id] >= 3:
-            eliminated.append(p_id)
-        else:
-            active.append(p_id)
-
-    # 排序 active 選手：優先以勝場多者在前面
-    active.sort(key=lambda x: (wins[x], -losses[x]), reverse=True)
-    return wins, losses, qualified, eliminated, active, played_pairs
+    ranked_ids = sorted(
+        range(1, 13), key=cmp_to_key(compare_players), reverse=True
+    )
+    return wins, losses, h2h, played_pairs, ranked_ids
 
 
-def generate_cutoff_next_round_pairs(current_round: int) -> List[Dict]:
-    (
-        wins,
-        losses,
-        qualified,
-        eliminated,
-        active,
-        played_pairs,
-    ) = calculate_swiss_cutoff_standings()
+def generate_next_round_pairs(current_round: int) -> List[Dict]:
+    wins, losses, _, played_pairs, ranked_ids = calculate_swiss_standings()
 
     def backtrack(
         candidates: List[int],
@@ -222,11 +215,11 @@ def generate_cutoff_next_round_pairs(current_round: int) -> List[Dict]:
 
         return None
 
-    new_pairs = backtrack(active)
+    new_pairs = backtrack(ranked_ids)
 
     if new_pairs is None:
         new_pairs = []
-        temp_candidates = active.copy()
+        temp_candidates = ranked_ids.copy()
         while len(temp_candidates) >= 2:
             p1 = temp_candidates.pop(0)
             match_found = False
@@ -320,11 +313,11 @@ is_admin = st.session_state["is_admin"]
 # 5. 主頁面：個人賽與團體賽切換
 # ==========================================
 main_tab1, main_tab2 = st.tabs(
-    ["👤 個人賽 (12人 3勝晉級/3敗淘汰)", "👥 團體賽 (6組 單循環)"]
+    ["👤 個人賽 (12人 4輪瑞士輪)", "👥 團體賽 (6組 單循環)"]
 )
 
 # ==========================================
-# 👥 團體賽主區塊
+# 👥 團體賽主區塊 (6組 15場單循環)
 # ==========================================
 with main_tab2:
     st.title("👥 第三屆 三重盃戰鬥陀螺大賽 - 團體賽")
@@ -616,12 +609,13 @@ with main_tab2:
             st.table(t_table)
 
 # ==========================================
-# 👤 個人賽主區塊 (3勝晉級 / 3敗淘汰)
+# 👤 個人賽主區塊 (12人 4輪瑞士輪)
 # ==========================================
 with main_tab1:
     st.title("💥 第三屆 三重盃戰鬥陀螺大賽 - 個人賽")
     st.caption(
-        "【個人賽】常規賽採 4 分制 | 限定 12 人 瑞士輪淘汰賽 (先滿 3 勝者晉級四強，先滿 3 敗者淘汰)"
+        "【個人賽】預賽採 4 分制 | 限定 12 人 4 輪瑞士輪 (每輪 6 場完全無輪空) |"
+        " 冠軍獎品：UX-15 鮫鯊狂鱗"
     )
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -629,7 +623,7 @@ with main_tab1:
         "⚔️ 預賽：瑞士輪控制台",
         "🗓️ 預賽賽程對戰表",
         "🏆 決賽：四強隨機抽籤淘汰",
-        "📊 即時戰績榜",
+        "📊 即時積分榜",
     ])
 
     # --- Tab 1: 報名與盲抽 ---
@@ -747,47 +741,20 @@ with main_tab1:
 
     # --- Tab 2: 控制台 ---
     with tab2:
-        st.header("⚔️ 預賽：瑞士輪控制台 (3勝晉級 / 3敗淘汰)")
+        st.header("⚔️ 預賽：4輪瑞士輪控制台 (常規賽採 4 分制)")
         if df_swiss is None or (df_reg["編號"] == 0).all():
             st.warning(
                 "⏳ 請先在「選手報名與抽籤」分頁集滿 12 人並完成盲抽！"
             )
         else:
-            (
-                wins,
-                losses,
-                qualified,
-                eliminated,
-                active,
-                _,
-            ) = calculate_swiss_cutoff_standings()
-
             current_max_round = int(df_swiss["輪次"].max())
             r_matches = df_swiss[df_swiss["輪次"] == current_max_round]
             completed_r_count = sum(1 for w in r_matches["勝者_編號"] if w != 0)
-            total_r_matches = len(r_matches)
 
             col_header, col_undo = st.columns([3, 1.2])
             with col_header:
                 st.info(
-                   qualified_str = (
-                ", ".join([f"{p}號 {player_map.get(p, '')}" for p in qualified])
-                if qualified
-                else "無"
-            )
-            eliminated_str = (
-                ", ".join(
-                    [f"{p}號 {player_map.get(p, '')}" for p in eliminated]
-                )
-                if eliminated
-                else "無"
-            )
-
-            col_header, col_undo = st.columns([3, 1.2])
-            with col_header:
-                st.info(f"""### 📍 當前進行：第 {current_max_round} 輪 (該輪進度：{completed_r_count} / {total_r_matches} 場)
-* 🏆 **已晉級四強 ({len(qualified)}/4 人)**：{qualified_str}
-* ❌ **已淘汰 ({len(eliminated)} 人)**：{eliminated_str}""")
+                    f"### 📍 當前進行：第 {current_max_round} / 4 輪 (該輪進度：{completed_r_count} / 6 場)"
                 )
             with col_undo:
                 if is_admin and current_max_round > 1:
@@ -857,15 +824,14 @@ with main_tab1:
                     )
                 st.write("---")
 
-            if is_admin and completed_r_count == total_r_matches:
-                if len(qualified) < 4 and len(active) >= 2:
+            if is_admin and completed_r_count == 6:
+                if current_max_round < 4:
                     if st.button(
-                        f"🚀 生成第 {current_max_round + 1} 輪對戰"
-                        f" (剩餘 {len(active)} 人比賽中)",
+                        f"🚀 生成第 {current_max_round + 1} 輪對戰",
                         type="primary",
                         use_container_width=True,
                     ):
-                        next_m = generate_cutoff_next_round_pairs(
+                        next_m = generate_next_round_pairs(
                             current_max_round + 1
                         )
                         df_swiss = pd.concat(
@@ -874,12 +840,10 @@ with main_tab1:
                         )
                         save_swiss_matches(df_swiss)
                         st.rerun()
-                elif len(qualified) >= 4:
-                    st.success("🎉 四強晉級名單已滿 4 人！請至【決賽】頁面開打！")
 
     # --- Tab 3: 對戰表 ---
     with tab3:
-        st.header("🗓️ 預賽各輪對戰紀錄")
+        st.header("🗓️ 預賽 4 輪對戰表")
         if df_swiss is not None:
             for r in range(1, int(df_swiss["輪次"].max()) + 1):
                 st.subheader(f"🌀 第 {r} 輪")
@@ -909,79 +873,68 @@ with main_tab1:
 
     # --- Tab 4: 決賽 ---
     with tab4:
-        st.header("🏆 四強單淘汰決賽 (晉級者隨機抽籤對決)")
-        (
-            wins,
-            losses,
-            qualified,
-            eliminated,
-            active,
-            _,
-        ) = calculate_swiss_cutoff_standings()
-
-        if len(qualified) < 4:
-            st.warning(
-                f"⏳ 預賽尚未篩選出 4 位 3 勝選手（目前已有 {len(qualified)} / 4 位晉級）"
-            )
+        st.header("🏆 四強單淘汰決賽 (晉級者全隨機抽籤)")
+        total_p = (
+            sum(1 for w in df_swiss["勝者_編號"] if w != 0)
+            if df_swiss is not None
+            else 0
+        )
+        if df_swiss is None or total_p < 24:  # 4輪 * 6場 = 24場完賽
+            st.warning(f"⏳ 預賽尚未完成（已完成 {total_p}/24 場）")
         else:
-            default_top4 = qualified[:4]
+            wins, losses, h2h, _, ranked_ids = calculate_swiss_standings()
 
+            default_top4 = ranked_ids[:4]
+            
             st.markdown("### 🏆 確定四強晉級名單")
-
+            
             if is_admin:
-                st.caption("💡 系統已自動帶入率先取得 3 勝晉級的 4 位選手：")
+                st.caption("💡 系統已依【勝場 + 對戰勝負】預設四強名單。若有打 PK 賽，請直接在下方選單調整勝出者：")
+                
                 col1, col2, col3, col4 = st.columns(4)
-
+                
                 p1_curr = st.session_state.get("custom_rank_1", default_top4[0])
                 p2_curr = st.session_state.get("custom_rank_2", default_top4[1])
                 p3_curr = st.session_state.get("custom_rank_3", default_top4[2])
                 p4_curr = st.session_state.get("custom_rank_4", default_top4[3])
-
+                
                 all_p_options = list(range(1, 13))
-
+                
                 with col1:
                     sel_p1 = st.selectbox(
                         "席位 1",
                         all_p_options,
-                        index=all_p_options.index(p1_curr)
-                        if p1_curr in all_p_options
-                        else 0,
+                        index=all_p_options.index(p1_curr) if p1_curr in all_p_options else 0,
                         format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
-                        key="sel_custom_p1",
+                        key="sel_custom_p1"
                     )
                 with col2:
                     sel_p2 = st.selectbox(
                         "席位 2",
                         all_p_options,
-                        index=all_p_options.index(p2_curr)
-                        if p2_curr in all_p_options
-                        else 1,
+                        index=all_p_options.index(p2_curr) if p2_curr in all_p_options else 1,
                         format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
-                        key="sel_custom_p2",
+                        key="sel_custom_p2"
                     )
                 with col3:
                     sel_p3 = st.selectbox(
                         "席位 3",
                         all_p_options,
-                        index=all_p_options.index(p3_curr)
-                        if p3_curr in all_p_options
-                        else 2,
+                        index=all_p_options.index(p3_curr) if p3_curr in all_p_options else 2,
                         format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
-                        key="sel_custom_p3",
+                        key="sel_custom_p3"
                     )
                 with col4:
                     sel_p4 = st.selectbox(
                         "席位 4",
                         all_p_options,
-                        index=all_p_options.index(p4_curr)
-                        if p4_curr in all_p_options
-                        else 3,
+                        index=all_p_options.index(p4_curr) if p4_curr in all_p_options else 3,
                         format_func=lambda x: f"{x}號 {player_map.get(x, '')}",
-                        key="sel_custom_p4",
+                        key="sel_custom_p4"
                     )
-
+                
                 final_4 = [sel_p1, sel_p2, sel_p3, sel_p4]
-
+                
                 if len(set(final_4)) < 4:
                     st.warning("⚠️ 四強名單中有重複選取的選手，請調整選單！")
                 else:
@@ -1327,37 +1280,18 @@ with main_tab1:
                 * 🏅 **殿軍**：{fourth_place}
                 """)
 
-    # --- Tab 5: 戰績榜 ---
+    # --- Tab 5: 積分榜 ---
     with tab5:
-        st.header("📊 即時選手戰績榜")
+        st.header("📊 即時積分榜")
         if df_swiss is not None:
-            (
-                wins,
-                losses,
-                qualified,
-                eliminated,
-                active,
-                _,
-            ) = calculate_swiss_cutoff_standings()
-
-            # 依勝場大到小排序
-            all_players_sorted = sorted(
-                range(1, 13), key=lambda x: (wins[x], -losses[x]), reverse=True
-            )
-
+            wins, losses, _, _, ranked_ids = calculate_swiss_standings()
             table_data = []
-            for rank, p_id in enumerate(all_players_sorted, 1):
-                status_str = "🟢 進行中"
-                if p_id in qualified:
-                    status_str = "🏆 已晉級四強"
-                elif p_id in eliminated:
-                    status_str = "❌ 已淘汰"
-
+            for rank, p_id in enumerate(ranked_ids, 1):
                 table_data.append({
+                    "排名": f"第 {rank} 名",
                     "編號": f"{p_id} 號",
                     "選手名稱": player_map.get(p_id, ""),
                     "勝場": wins[p_id],
                     "敗場": losses[p_id],
-                    "當前狀態": status_str,
                 })
             st.table(table_data)
