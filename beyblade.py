@@ -770,12 +770,24 @@ with main_tab1:
             col_header, col_undo = st.columns([3, 1.2])
             with col_header:
                 st.info(
-                    f"### 📍 當前進行：第 {current_max_round} 輪"
-                    f" (該輪進度：{completed_r_count} / {total_r_matches} 場)\n"
-                    f"* 🏆 **已晉級四強 ({len(qualified)}/4 人)**："
-                    f" {', '.join([f'{p}號 {player_map.get(p, \"\")}' for p in qualified]) if qualified else '無'}\n"
-                    f"* ❌ **已淘汰 ({len(eliminated)} 人)**："
-                    f" {', '.join([f'{p}號 {player_map.get(p, \"\")}' for p in eliminated]) if eliminated else '無'}"
+                   qualified_str = (
+                ", ".join([f"{p}號 {player_map.get(p, '')}" for p in qualified])
+                if qualified
+                else "無"
+            )
+            eliminated_str = (
+                ", ".join(
+                    [f"{p}號 {player_map.get(p, '')}" for p in eliminated]
+                )
+                if eliminated
+                else "無"
+            )
+
+            col_header, col_undo = st.columns([3, 1.2])
+            with col_header:
+                st.info(f"""### 📍 當前進行：第 {current_max_round} 輪 (該輪進度：{completed_r_count} / {total_r_matches} 場)
+* 🏆 **已晉級四強 ({len(qualified)}/4 人)**：{qualified_str}
+* ❌ **已淘汰 ({len(eliminated)} 人)**：{eliminated_str}""")
                 )
             with col_undo:
                 if is_admin and current_max_round > 1:
