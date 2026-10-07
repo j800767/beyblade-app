@@ -331,9 +331,7 @@ main_tab1, main_tab2 = st.tabs(
 # ==========================================
 with main_tab2:
     st.title("👥 第四屆 三重盃戰鬥陀螺大賽 - 團體賽")
-    st.caption(
-        "【團體賽】8 隊分為紅藍兩組單循環 | 各組前 2 名晉級四強交叉淘汰賽"
-    )
+    st.caption("【團體賽】8 隊分為紅藍兩組單循環 | 各組前 2 名晉級四強交叉淘汰賽")
 
     t_tab1, t_tab2, t_tab3, t_tab4 = st.tabs([
         "📝 隊伍與選手登記",
@@ -345,9 +343,14 @@ with main_tab2:
     with t_tab1:
         st.header("📝 團體賽隊伍與選手登記 (A~H 組)")
         if df_team_p.empty:
-            df_team_p = pd.DataFrame(
-                {"組別": TEAM_NAMES, "選手1": [""] * 8, "選手2": [""] * 8}
-            )
+            df_team_p = pd.DataFrame({
+                "組別": TEAM_NAMES,
+                "選手1": [""] * 8,
+                "選手2": [""] * 8,
+                "分組": ["未分配"] * 8
+            })
+        elif "分組" not in df_team_p.columns:
+            df_team_p["分組"] = "未分配"
 
         if is_admin:
             with st.form("team_p_form"):
@@ -356,19 +359,25 @@ with main_tab2:
                 for t in TEAM_NAMES:
                     curr_p1 = (
                         df_team_p.loc[df_team_p["組別"] == t, "選手1"].values[0]
-                        if t in df_team_p["組別"].values
-                        else ""
+                        if t in df_team_p["組別"].values else ""
                     )
                     curr_p2 = (
                         df_team_p.loc[df_team_p["組別"] == t, "選手2"].values[0]
-                        if t in df_team_p["組別"].values
-                        else ""
+                        if t in df_team_p["組別"].values else ""
                     )
+                    curr_group = (
+                        df_team_p.loc[df_team_p["組別"] == t, "分組"].values[0]
+                        if t in df_team_p["組別"].values else "未分配"
+                    )
+
+                    group_tag = "⚪ 未分配"
+                    if curr_group == "紅組":
+                        group_tag = "🔴 紅組"
+                    elif curr_group == "藍組":
+                        group_tag = "🔵 藍組"
+
                     c1, c2, c3 = st.columns([1, 2, 2])
                     with c1:
-                        group_tag = (
-                            "🔴 紅組" if t in GROUP_A_TEAMS else "🔵 藍組"
-                        )
                         st.markdown(f"### **{t}** ({group_tag})")
                     with c2:
                         p1_val = st.text_input(
@@ -382,6 +391,7 @@ with main_tab2:
                         "組別": t,
                         "選手1": p1_val.strip(),
                         "選手2": p2_val.strip(),
+                        "分組": curr_group,
                     })
 
                 if st.form_submit_button("💾 儲存團體賽名單", type="primary"):
@@ -391,24 +401,62 @@ with main_tab2:
                     st.rerun()
 
             st.write("---")
-            if st.button(
-                "🚀 初始化團體賽 12 場小組單循環對戰表",
-                type="secondary",
-                use_container_width=True,
-            ):
-                t_matches = []
-                for idx, (t1, t2, g_label) in enumerate(TEAM_SCHEDULE_12, 1):
-                    t_matches.append({
-                        "場次": idx,
-                        "分組": g_label,
-                        "隊伍A": t1,
-                        "隊伍B": t2,
-                        "勝隊": "未完賽",
-                    })
-                save_team_matches(pd.DataFrame(t_matches))
-                save_team_finals(None)
-                st.success("🎉 團體賽 12 場對戰生成完畢！")
-                st.rerun()
+            col_draw, col_init = st.columns(2)
+            with col_draw:
+                if st.button("🎲 隨機抽籤分配【紅組/藍組】", use_container_width=True):
+                    shuffled_teams = TEAM_NAMES.copy()
+                    random.shuffle(shuffled_teams)
+                    
+                    red_teams = shuffled_teams[:4]
+                    blue_teams = shuffled_teams[4:]
+                    
+                    for t in TEAM_NAMES:
+                        g_val = "紅組" if t in red_teams else "藍組"
+                        df_team_p.loc[df_team_p["組別"] == t, "分組"] = g_val
+                    
+                    save_team_players(df_team_p)
+                    save_team_matches(None) # 重置賽程
+                    save_team_finals(None)
+                    st.toast("🎲 隨機抽籤完成！紅藍組已重新分配！")
+                    st.rerun()
+
+            with col_init:
+                if st.button("🚀 初始化團體賽對戰表", type="primary", use_container_width=True):
+                    red_teams = df_team_p[df_team_p["分組"] == "紅組"]["組別"].tolist()
+                    blue_teams = df_team_p[df_team_p["分組"] == "藍組"]["組別"].tolist()
+
+                    if len(red_teams) != 4 or len(blue_teams) != 4:
+                        st.error("❌ 請先點擊【🎲 隨機抽籤分配【紅組/藍組】】以確定紅藍組隊伍！")
+                    else:
+                        def make_schedule(teams, label):
+                            return [
+                                (teams[0], teams[1], label),
+                                (teams[2], teams[3], label),
+                                (teams[0], teams[2], label),
+                                (teams[1], teams[3], label),
+                                (teams[0], teams[3], label),
+                                (teams[1], teams[2], label),
+                            ]
+
+                        red_sched = make_schedule(red_teams, "紅組")
+                        blue_sched = make_schedule(blue_teams, "藍組")
+                        
+                        t_matches = []
+                        idx = 1
+                        for t1, t2, g_label in red_sched + blue_sched:
+                            t_matches.append({
+                                "場次": idx,
+                                "分組": g_label,
+                                "隊伍A": t1,
+                                "隊伍B": t2,
+                                "勝隊": "未完賽",
+                            })
+                            idx += 1
+
+                        save_team_matches(pd.DataFrame(t_matches))
+                        save_team_finals(None)
+                        st.success("🎉 團體賽小組循環賽程生成完畢！")
+                        st.rerun()
         else:
             st.dataframe(df_team_p, use_container_width=True, hide_index=True)
 
