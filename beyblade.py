@@ -23,24 +23,6 @@ TEAM_FINALS_FILE = "team_finals_matches.csv"  # 團體賽四強決賽檔案
 
 ADMIN_PASSWORD = "admin"  # 管理員預設密碼
 TEAM_NAMES = ["A組", "B組", "C組", "D組", "E組", "F組", "G組", "H組"]
-GROUP_A_TEAMS = ["A組", "B組", "C組", "D組"]
-GROUP_B_TEAMS = ["E組", "F組", "G組", "H組"]
-
-# 8隊分兩組單循環對戰組合 (每組 6 場，共 12 場)
-TEAM_SCHEDULE_12 = [
-    ("A組", "B組", "紅組(A)"),
-    ("C組", "D組", "紅組(A)"),
-    ("A組", "C組", "紅組(A)"),
-    ("B組", "D組", "紅組(A)"),
-    ("A組", "D組", "紅組(A)"),
-    ("B組", "C組", "紅組(A)"),
-    ("E組", "F組", "藍組(B)"),
-    ("G組", "H組", "藍組(B)"),
-    ("E組", "G組", "藍組(B)"),
-    ("F組", "H組", "藍組(B)"),
-    ("E組", "H組", "藍組(B)"),
-    ("F組", "G組", "藍組(B)"),
-]
 
 
 # ==========================================
@@ -99,7 +81,7 @@ def save_finals(df: Optional[pd.DataFrame]) -> None:
 def load_team_players() -> pd.DataFrame:
     if os.path.exists(TEAM_DATA_FILE):
         return pd.read_csv(TEAM_DATA_FILE).fillna("")
-    return pd.DataFrame(columns=["組別", "選手1", "選手2"])
+    return pd.DataFrame(columns=["組別", "選手1", "選手2", "分組"])
 
 
 def save_team_players(df: pd.DataFrame) -> None:
@@ -154,7 +136,7 @@ player_map = (
 
 
 # ==========================================
-# 3. 16人 3勝晉級八強 / 3敗淘汰 計算邏輯
+# 3. 計算邏輯 (瑞士輪 & 團體小組賽)
 # ==========================================
 def calculate_swiss_cutoff_standings_16() -> Tuple[
     Dict[int, int],
@@ -347,7 +329,7 @@ with main_tab2:
                 "組別": TEAM_NAMES,
                 "選手1": [""] * 8,
                 "選手2": [""] * 8,
-                "分組": ["未分配"] * 8
+                "分組": ["未分配"] * 8,
             })
         elif "分組" not in df_team_p.columns:
             df_team_p["分組"] = "未分配"
@@ -359,15 +341,18 @@ with main_tab2:
                 for t in TEAM_NAMES:
                     curr_p1 = (
                         df_team_p.loc[df_team_p["組別"] == t, "選手1"].values[0]
-                        if t in df_team_p["組別"].values else ""
+                        if t in df_team_p["組別"].values
+                        else ""
                     )
                     curr_p2 = (
                         df_team_p.loc[df_team_p["組別"] == t, "選手2"].values[0]
-                        if t in df_team_p["組別"].values else ""
+                        if t in df_team_p["組別"].values
+                        else ""
                     )
                     curr_group = (
                         df_team_p.loc[df_team_p["組別"] == t, "分組"].values[0]
-                        if t in df_team_p["組別"].values else "未分配"
+                        if t in df_team_p["組別"].values
+                        else "未分配"
                     )
 
                     group_tag = "⚪ 未分配"
@@ -406,28 +391,37 @@ with main_tab2:
                 if st.button("🎲 隨機抽籤分配【紅組/藍組】", use_container_width=True):
                     shuffled_teams = TEAM_NAMES.copy()
                     random.shuffle(shuffled_teams)
-                    
+
                     red_teams = shuffled_teams[:4]
                     blue_teams = shuffled_teams[4:]
-                    
+
                     for t in TEAM_NAMES:
                         g_val = "紅組" if t in red_teams else "藍組"
                         df_team_p.loc[df_team_p["組別"] == t, "分組"] = g_val
-                    
+
                     save_team_players(df_team_p)
-                    save_team_matches(None) # 重置賽程
+                    save_team_matches(None)  # 重置賽程
                     save_team_finals(None)
                     st.toast("🎲 隨機抽籤完成！紅藍組已重新分配！")
                     st.rerun()
 
             with col_init:
-                if st.button("🚀 初始化團體賽對戰表", type="primary", use_container_width=True):
-                    red_teams = df_team_p[df_team_p["分組"] == "紅組"]["組別"].tolist()
-                    blue_teams = df_team_p[df_team_p["分組"] == "藍組"]["組別"].tolist()
+                if st.button(
+                    "🚀 初始化團體賽對戰表", type="primary", use_container_width=True
+                ):
+                    red_teams = df_team_p[df_team_p["分組"] == "紅組"][
+                        "組別"
+                    ].tolist()
+                    blue_teams = df_team_p[df_team_p["分組"] == "藍組"][
+                        "組別"
+                    ].tolist()
 
                     if len(red_teams) != 4 or len(blue_teams) != 4:
-                        st.error("❌ 請先點擊【🎲 隨機抽籤分配【紅組/藍組】】以確定紅藍組隊伍！")
+                        st.error(
+                            "❌ 請先點擊【🎲 隨機抽籤分配【紅組/藍組】】以確定紅藍組隊伍！"
+                        )
                     else:
+
                         def make_schedule(teams, label):
                             return [
                                 (teams[0], teams[1], label),
@@ -440,7 +434,7 @@ with main_tab2:
 
                         red_sched = make_schedule(red_teams, "紅組")
                         blue_sched = make_schedule(blue_teams, "藍組")
-                        
+
                         t_matches = []
                         idx = 1
                         for t1, t2, g_label in red_sched + blue_sched:
@@ -527,13 +521,27 @@ with main_tab2:
             else 0
         )
 
-        if df_team_m is None or completed_tm < 12:
-            st.warning(
-                f"⏳ 團體預賽尚未結束（已完成 {completed_tm}/12 場）"
-            )
+        red_teams = (
+            df_team_p[df_team_p["分組"] == "紅組"]["組別"].tolist()
+            if not df_team_p.empty and "分組" in df_team_p.columns
+            else []
+        )
+        blue_teams = (
+            df_team_p[df_team_p["分組"] == "藍組"]["組別"].tolist()
+            if not df_team_p.empty and "分組" in df_team_p.columns
+            else []
+        )
+
+        if (
+            df_team_m is None
+            or completed_tm < 12
+            or len(red_teams) != 4
+            or len(blue_teams) != 4
+        ):
+            st.warning(f"⏳ 團體預賽尚未結束（已完成 {completed_tm}/12 場）")
         else:
-            _, _, ranked_a = calculate_group_standings(GROUP_A_TEAMS)
-            _, _, ranked_b = calculate_group_standings(GROUP_B_TEAMS)
+            _, _, ranked_a = calculate_group_standings(red_teams)
+            _, _, ranked_b = calculate_group_standings(blue_teams)
 
             a1, a2 = ranked_a[0], ranked_a[1]
             b1, b2 = ranked_b[0], ranked_b[1]
@@ -577,7 +585,6 @@ with main_tab2:
                 df_team_f = pd.DataFrame(finals_data)
                 save_team_finals(df_team_f)
 
-            # 控制與顯示四強戰況
             sf1_w = df_team_f.loc[df_team_f["階段"] == "準決賽1", "勝隊"].values[
                 0
             ]
@@ -590,7 +597,9 @@ with main_tab2:
             col_tf1, col_tf2 = st.columns(2)
 
             with col_tf1:
-                st.markdown(f"##### ⚔️ 準決賽 1：**🔴 {a1} (紅1)** 🆚 **🔵 {b2} (藍2)**")
+                st.markdown(
+                    f"##### ⚔️ 準決賽 1：**🔴 {a1} (紅1)** 🆚 **🔵 {b2} (藍2)**"
+                )
                 if is_admin:
                     opts_tf1 = ["請選擇勝隊...", a1, b2]
                     curr_tf1 = sf1_w if sf1_w in opts_tf1 else "請選擇勝隊..."
@@ -637,7 +646,9 @@ with main_tab2:
                     st.write(f"勝隊：`{sf1_w if sf1_w else '比賽中'}`")
 
             with col_tf2:
-                st.markdown(f"##### ⚔️ 準決賽 2：**🔴 {b1} (藍1)** 🆚 **🔵 {a2} (紅2)**")
+                st.markdown(
+                    f"##### ⚔️ 準決賽 2：**🔴 {b1} (藍1)** 🆚 **🔵 {a2} (紅2)**"
+                )
                 if is_admin:
                     opts_tf2 = ["請選擇勝隊...", b1, a2]
                     curr_tf2 = sf2_w if sf2_w in opts_tf2 else "請選擇勝隊..."
@@ -786,33 +797,47 @@ with main_tab2:
     with t_tab4:
         st.header("📊 團體賽小組積分榜")
         if df_team_m is not None:
-            c_a, c_b = st.columns(2)
-            with c_a:
-                st.subheader("🔴 紅組 (Group A)")
-                w_a, l_a, r_a = calculate_group_standings(GROUP_A_TEAMS)
-                tb_a = [
-                    {
-                        "排名": f"第 {i} 名",
-                        "隊伍": t,
-                        "勝": w_a[t],
-                        "敗": l_a[t],
-                    }
-                    for i, t in enumerate(r_a, 1)
-                ]
-                st.table(tb_a)
-            with c_b:
-                st.subheader("🔵 藍組 (Group B)")
-                w_b, l_b, r_b = calculate_group_standings(GROUP_B_TEAMS)
-                tb_b = [
-                    {
-                        "排名": f"第 {i} 名",
-                        "隊伍": t,
-                        "勝": w_b[t],
-                        "敗": l_b[t],
-                    }
-                    for i, t in enumerate(r_b, 1)
-                ]
-                st.table(tb_b)
+            red_teams = (
+                df_team_p[df_team_p["分組"] == "紅組"]["組別"].tolist()
+                if not df_team_p.empty and "分組" in df_team_p.columns
+                else []
+            )
+            blue_teams = (
+                df_team_p[df_team_p["分組"] == "藍組"]["組別"].tolist()
+                if not df_team_p.empty and "分組" in df_team_p.columns
+                else []
+            )
+
+            if len(red_teams) == 4 and len(blue_teams) == 4:
+                c_a, c_b = st.columns(2)
+                with c_a:
+                    st.subheader("🔴 紅組 (Group A)")
+                    w_a, l_a, r_a = calculate_group_standings(red_teams)
+                    tb_a = [
+                        {
+                            "排名": f"第 {i} 名",
+                            "隊伍": t,
+                            "勝": w_a[t],
+                            "敗": l_a[t],
+                        }
+                        for i, t in enumerate(r_a, 1)
+                    ]
+                    st.table(tb_a)
+                with c_b:
+                    st.subheader("🔵 藍組 (Group B)")
+                    w_b, l_b, r_b = calculate_group_standings(blue_teams)
+                    tb_b = [
+                        {
+                            "排名": f"第 {i} 名",
+                            "隊伍": t,
+                            "勝": w_b[t],
+                            "敗": l_b[t],
+                        }
+                        for i, t in enumerate(r_b, 1)
+                    ]
+                    st.table(tb_b)
+            else:
+                st.info("💡 請先進行【紅組/藍組】隨機抽籤分配與對戰表初始化！")
 
 # ==========================================
 # 👤 個人賽主區塊 (16人 3勝晉級八強)
@@ -1029,7 +1054,7 @@ with main_tab1:
                     hide_index=True,
                 )
 
-   # --- Tab 4: 決賽 ---
+    # --- Tab 4: 決賽 ---
     with tab4:
         st.header("🏆 八強單淘汰決賽")
         (
@@ -1049,11 +1074,10 @@ with main_tab1:
             q_names = [f"{p}號 {player_map.get(p, '')}" for p in qualified[:8]]
             st.success(f"🎉 晉級八強選手：{', '.join(q_names)}")
 
-            # 1. 抽籤生成八強對戰
             if is_admin:
                 draw_btn_text = (
                     "🎲 進行八強隨機抽籤 / 重新對調"
-                    if df_finals is not None
+                    if df_finals is not None and not df_finals.empty
                     else "🎲 進行八強隨機抽籤"
                 )
                 if st.button(draw_btn_text, type="primary"):
@@ -1062,14 +1086,62 @@ with main_tab1:
 
                     s = [str(player_map.get(p, "")) for p in shuffled_8]
                     finals_data = [
-                        {"階段": "半準決賽1", "選手1": s[0], "選手2": s[1], "勝者": "", "敗者": ""},
-                        {"階段": "半準決賽2", "選手1": s[2], "選手2": s[3], "勝者": "", "敗者": ""},
-                        {"階段": "半準決賽3", "選手1": s[4], "選手2": s[5], "勝者": "", "敗者": ""},
-                        {"階段": "半準決賽4", "選手1": s[6], "選手2": s[7], "勝者": "", "敗者": ""},
-                        {"階段": "準決賽A", "選手1": "待定", "選手2": "待定", "勝者": "", "敗者": ""},
-                        {"階段": "準決賽B", "選手1": "待定", "選手2": "待定", "勝者": "", "敗者": ""},
-                        {"階段": "季軍賽", "選手1": "待定", "選手2": "待定", "勝者": "", "敗者": ""},
-                        {"階段": "冠軍賽", "選手1": "待定", "選手2": "待定", "勝者": "", "敗者": ""},
+                        {
+                            "階段": "半準決賽1",
+                            "選手1": s[0],
+                            "選手2": s[1],
+                            "勝者": "",
+                            "敗者": "",
+                        },
+                        {
+                            "階段": "半準決賽2",
+                            "選手1": s[2],
+                            "選手2": s[3],
+                            "勝者": "",
+                            "敗者": "",
+                        },
+                        {
+                            "階段": "半準決賽3",
+                            "選手1": s[4],
+                            "選手2": s[5],
+                            "勝者": "",
+                            "敗者": "",
+                        },
+                        {
+                            "階段": "半準決賽4",
+                            "選手1": s[6],
+                            "選手2": s[7],
+                            "勝者": "",
+                            "敗者": "",
+                        },
+                        {
+                            "階段": "準決賽A",
+                            "選手1": "待定",
+                            "選手2": "待定",
+                            "勝者": "",
+                            "敗者": "",
+                        },
+                        {
+                            "階段": "準決賽B",
+                            "選手1": "待定",
+                            "選手2": "待定",
+                            "勝者": "",
+                            "敗者": "",
+                        },
+                        {
+                            "階段": "季軍賽",
+                            "選手1": "待定",
+                            "選手2": "待定",
+                            "勝者": "",
+                            "敗者": "",
+                        },
+                        {
+                            "階段": "冠軍賽",
+                            "選手1": "待定",
+                            "選手2": "待定",
+                            "勝者": "",
+                            "敗者": "",
+                        },
                     ]
                     df_finals = pd.DataFrame(finals_data)
                     save_finals(df_finals)
@@ -1077,7 +1149,9 @@ with main_tab1:
                     st.rerun()
 
             if df_finals is None or df_finals.empty:
-                st.info("💡 請管理員點擊上方【🎲 進行八強隨機抽籤】以產生對戰圖！")
+                st.info(
+                    "💡 請管理員點擊上方【🎲 進行八強隨機抽籤】以產生對戰圖！"
+                )
             else:
                 for col in ["階段", "選手1", "選手2", "勝者", "敗者"]:
                     df_finals[col] = df_finals[col].astype(str)
@@ -1088,13 +1162,18 @@ with main_tab1:
 
                 q_stages = ["半準決賽1", "半準決賽2", "半準決賽3", "半準決賽4"]
                 q_cols = [col1, col2, col3, col4]
-                q_winners = []
 
                 for idx, stage in enumerate(q_stages):
                     with q_cols[idx]:
-                        p1 = df_finals.loc[df_finals["階段"] == stage, "選手1"].values[0]
-                        p2 = df_finals.loc[df_finals["階段"] == stage, "選手2"].values[0]
-                        w = df_finals.loc[df_finals["階段"] == stage, "勝者"].values[0]
+                        p1 = df_finals.loc[
+                            df_finals["階段"] == stage, "選手1"
+                        ].values[0]
+                        p2 = df_finals.loc[
+                            df_finals["階段"] == stage, "選手2"
+                        ].values[0]
+                        w = df_finals.loc[
+                            df_finals["階段"] == stage, "勝者"
+                        ].values[0]
 
                         st.markdown(f"##### ⚔️ {stage}")
                         st.write(f"🔴 **{p1}** VS 🔵 **{p2}**")
@@ -1102,42 +1181,77 @@ with main_tab1:
                         if is_admin:
                             opts = ["請選擇勝者...", p1, p2]
                             curr = w if w in opts else "請選擇勝者..."
-                            sel = st.selectbox(f"勝者 ({stage})：", opts, index=opts.index(curr), key=f"sel_{stage}")
+                            sel = st.selectbox(
+                                f"勝者 ({stage})：",
+                                opts,
+                                index=opts.index(curr),
+                                key=f"sel_{stage}",
+                            )
                             if sel != "請選擇勝者..." and sel != w:
                                 loser = p2 if sel == p1 else p1
-                                df_finals.loc[df_finals["階段"] == stage, "勝者"] = str(sel)
-                                df_finals.loc[df_finals["階段"] == stage, "敗者"] = str(loser)
+                                df_finals.loc[
+                                    df_finals["階段"] == stage, "勝者"
+                                ] = str(sel)
+                                df_finals.loc[
+                                    df_finals["階段"] == stage, "敗者"
+                                ] = str(loser)
 
-                                # 自動更新四強名單
-                                w1 = df_finals.loc[df_finals["階段"] == "半準決賽1", "勝者"].values[0]
-                                w2 = df_finals.loc[df_finals["階段"] == "半準決賽2", "勝者"].values[0]
-                                w3 = df_finals.loc[df_finals["階段"] == "半準決賽3", "勝者"].values[0]
-                                w4 = df_finals.loc[df_finals["階段"] == "半準決賽4", "勝者"].values[0]
+                                w1 = df_finals.loc[
+                                    df_finals["階段"] == "半準決賽1", "勝者"
+                                ].values[0]
+                                w2 = df_finals.loc[
+                                    df_finals["階段"] == "半準決賽2", "勝者"
+                                ].values[0]
+                                w3 = df_finals.loc[
+                                    df_finals["階段"] == "半準決賽3", "勝者"
+                                ].values[0]
+                                w4 = df_finals.loc[
+                                    df_finals["階段"] == "半準決賽4", "勝者"
+                                ].values[0]
 
                                 if w1 and w2:
-                                    df_finals.loc[df_finals["階段"] == "準決賽A", "選手1"] = str(w1)
-                                    df_finals.loc[df_finals["階段"] == "準決賽A", "選手2"] = str(w2)
+                                    df_finals.loc[
+                                        df_finals["階段"] == "準決賽A", "選手1"
+                                    ] = str(w1)
+                                    df_finals.loc[
+                                        df_finals["階段"] == "準決賽A", "選手2"
+                                    ] = str(w2)
                                 if w3 and w4:
-                                    df_finals.loc[df_finals["階段"] == "準決賽B", "選手1"] = str(w3)
-                                    df_finals.loc[df_finals["階段"] == "準決賽B", "選手2"] = str(w4)
+                                    df_finals.loc[
+                                        df_finals["階段"] == "準決賽B", "選手1"
+                                    ] = str(w3)
+                                    df_finals.loc[
+                                        df_finals["階段"] == "準決賽B", "選手2"
+                                    ] = str(w4)
 
                                 save_finals(df_finals)
                                 st.rerun()
                         else:
                             st.write(f"勝者：`{w if w else '比賽中'}`")
 
-                # 2. 準決賽
                 st.write("---")
                 st.subheader("🥊 2. 準決賽 (Semi-Finals)")
                 col_sfa, col_sfb = st.columns(2)
 
-                sf_a_p1 = df_finals.loc[df_finals["階段"] == "準決賽A", "選手1"].values[0]
-                sf_a_p2 = df_finals.loc[df_finals["階段"] == "準決賽A", "選手2"].values[0]
-                sf_a_w = df_finals.loc[df_finals["階段"] == "準決賽A", "勝者"].values[0]
+                sf_a_p1 = df_finals.loc[
+                    df_finals["階段"] == "準決賽A", "選手1"
+                ].values[0]
+                sf_a_p2 = df_finals.loc[
+                    df_finals["階段"] == "準決賽A", "選手2"
+                ].values[0]
+                sf_a_w = df_finals.loc[
+                    df_finals["階段"] == "準決賽A", "勝者"
+                ].values[0]
 
-                sf_b_p1 = df_finals.loc[df_finals["階段"] == "準決賽B", "選手1"].values[0]
-                sf_b_p2 = df_finals.loc[df_finals["階段"] == "準決賽B", "選手2"].values[0]
-                sf_b_w = df_finals.loc[df_finals["階段"] == "準決賽B", "勝者"].values[0]
+                sf_b_p1 = df_finals.loc[
+                    df_finals["階段"] == "準決賽B", "選手1"
+                ].values[0]
+                sf_b_p2 = df_finals.loc[
+                    df_finals["階段"] == "準決賽B", "選手2"
+                ].values[0]
+                sf_b_w = df_finals.loc[
+                    df_finals["階段"] == "準決賽B", "勝者"
+                ].values[0]
 
                 with col_sfa:
                     st.markdown("##### ⚔️ 準決賽 A")
@@ -1145,18 +1259,212 @@ with main_tab1:
                     if is_admin and sf_a_p1 != "待定" and sf_a_p2 != "待定":
                         opts_a = ["請選擇勝者...", sf_a_p1, sf_a_p2]
                         curr_a = sf_a_w if sf_a_w in opts_a else "請選擇勝者..."
-                        sel_a = st.selectbox("選擇準決賽 A 勝者：", opts_a, index=opts_a.index(curr_a), key="sel_sfa")
+                        sel_a = st.selectbox(
+                            "選擇準決賽 A 勝者：",
+                            opts_a,
+                            index=opts_a.index(curr_a),
+                            key="sel_sfa",
+                        )
                         if sel_a != "請選擇勝者..." and sel_a != sf_a_w:
                             loser_a = sf_a_p2 if sel_a == sf_a_p1 else sf_a_p1
-                            df_finals.loc[df_finals["階段"] == "準決賽A", "勝者"] = str(sel_a)
-                            df_finals.loc[df_finals["階段"] == "準決賽A", "敗者"] = str(loser_a)
+                            df_finals.loc[
+                                df_finals["階段"] == "準決賽A", "勝者"
+                            ] = str(sel_a)
+                            df_finals.loc[
+                                df_finals["階段"] == "準決賽A", "敗者"
+                            ] = str(loser_a)
 
-                            sf_b_l = df_finals.loc[df_finals["階段"] == "準決賽B", "敗者"].values[0]
-                            sf_b_w_curr = df_finals.loc[df_finals["階段"] == "準決賽B", "勝者"].values[0]
+                            sf_b_l = df_finals.loc[
+                                df_finals["階段"] == "準決賽B", "敗者"
+                            ].values[0]
+                            sf_b_w_curr = df_finals.loc[
+                                df_finals["階段"] == "準決賽B", "勝者"
+                            ].values[0]
 
                             if loser_a and sf_b_l and sf_b_l != "":
-                                df_finals.loc[df_finals["階段"] == "季軍賽", "選手1"] = str(loser_a)
-                                df_finals.loc[df_finals["階段"] == "季
+                                df_finals.loc[
+                                    df_finals["階段"] == "季軍賽", "選手1"
+                                ] = str(loser_a)
+                                df_finals.loc[
+                                    df_finals["階段"] == "季軍賽", "選手2"
+                                ] = str(sf_b_l)
+                            if sel_a and sf_b_w_curr and sf_b_w_curr != "":
+                                df_finals.loc[
+                                    df_finals["階段"] == "冠軍賽", "選手1"
+                                ] = str(sel_a)
+                                df_finals.loc[
+                                    df_finals["階段"] == "冠軍賽", "選手2"
+                                ] = str(sf_b_w_curr)
+
+                            save_finals(df_finals)
+                            st.rerun()
+                    else:
+                        st.write(f"勝者：`{sf_a_w if sf_a_w else '未決定'}`")
+
+                with col_sfb:
+                    st.markdown("##### ⚔️ 準決賽 B")
+                    st.write(f"🔴 **{sf_b_p1}** VS 🔵 **{sf_b_p2}**")
+                    if is_admin and sf_b_p1 != "待定" and sf_b_p2 != "待定":
+                        opts_b = ["請選擇勝者...", sf_b_p1, sf_b_p2]
+                        curr_b = sf_b_w if sf_b_w in opts_b else "請選擇勝者..."
+                        sel_b = st.selectbox(
+                            "選擇準決賽 B 勝者：",
+                            opts_b,
+                            index=opts_b.index(curr_b),
+                            key="sel_sfb",
+                        )
+                        if sel_b != "請選擇勝者..." and sel_b != sf_b_w:
+                            loser_b = sf_b_p2 if sel_b == sf_b_p1 else sf_b_p1
+                            df_finals.loc[
+                                df_finals["階段"] == "準決賽B", "勝者"
+                            ] = str(sel_b)
+                            df_finals.loc[
+                                df_finals["階段"] == "準決賽B", "敗者"
+                            ] = str(loser_b)
+
+                            sf_a_l = df_finals.loc[
+                                df_finals["階段"] == "準決賽A", "敗者"
+                            ].values[0]
+                            sf_a_w_curr = df_finals.loc[
+                                df_finals["階段"] == "準決賽A", "勝者"
+                            ].values[0]
+
+                            if loser_b and sf_a_l and sf_a_l != "":
+                                df_finals.loc[
+                                    df_finals["階段"] == "季軍賽", "選手1"
+                                ] = str(sf_a_l)
+                                df_finals.loc[
+                                    df_finals["階段"] == "季軍賽", "選手2"
+                                ] = str(loser_b)
+                            if sel_b and sf_a_w_curr and sf_a_w_curr != "":
+                                df_finals.loc[
+                                    df_finals["階段"] == "冠軍賽", "選手1"
+                                ] = str(sf_a_w_curr)
+                                df_finals.loc[
+                                    df_finals["階段"] == "冠軍賽", "選手2"
+                                ] = str(sel_b)
+
+                            save_finals(df_finals)
+                            st.rerun()
+                    else:
+                        st.write(f"勝者：`{sf_b_w if sf_b_w else '未決定'}`")
+
+                st.write("---")
+                st.subheader("🥇 3. 總決賽 (Finals)")
+                col_3rd, col_1st = st.columns(2)
+
+                p3_1 = str(
+                    df_finals.loc[
+                        df_finals["階段"] == "季軍賽", "選手1"
+                    ].values[0]
+                )
+                p3_2 = str(
+                    df_finals.loc[
+                        df_finals["階段"] == "季軍賽", "選手2"
+                    ].values[0]
+                )
+                p3_w = str(
+                    df_finals.loc[
+                        df_finals["階段"] == "季軍賽", "勝者"
+                    ].values[0]
+                )
+
+                p1_1 = str(
+                    df_finals.loc[
+                        df_finals["階段"] == "冠軍賽", "選手1"
+                    ].values[0]
+                )
+                p1_2 = str(
+                    df_finals.loc[
+                        df_finals["階段"] == "冠軍賽", "選手2"
+                    ].values[0]
+                )
+                p1_w = str(
+                    df_finals.loc[
+                        df_finals["階段"] == "冠軍賽", "勝者"
+                    ].values[0]
+                )
+
+                with col_3rd:
+                    st.markdown("##### 🥉 季軍賽 (3rd Place)")
+                    if p3_1 != "待定" and p3_2 != "待定":
+                        st.write(f"🔴 **{p3_1}** VS 🔵 **{p3_2}**")
+                        if is_admin:
+                            opts_3 = ["請選擇勝者...", p3_1, p3_2]
+                            curr_3 = (
+                                p3_w if p3_w in opts_3 else "請選擇勝者..."
+                            )
+                            sel_3 = st.selectbox(
+                                "選擇季軍賽勝者：",
+                                opts_3,
+                                index=opts_3.index(curr_3),
+                                key="p3_sel",
+                            )
+                            if sel_3 != "請選擇勝者..." and sel_3 != p3_w:
+                                loser_3 = p3_2 if sel_3 == p3_1 else p3_1
+                                df_finals.loc[
+                                    df_finals["階段"] == "季軍賽", "勝者"
+                                ] = str(sel_3)
+                                df_finals.loc[
+                                    df_finals["階段"] == "季軍賽", "敗者"
+                                ] = str(loser_3)
+                                save_finals(df_finals)
+                                st.rerun()
+                        else:
+                            st.write(f"勝者：`{p3_w if p3_w else '未決定'}`")
+
+                with col_1st:
+                    st.markdown("##### 👑 冠軍賽 (Championship)")
+                    if p1_1 != "待定" and p1_2 != "待定":
+                        st.write(f"🔴 **{p1_1}** VS 🔵 **{p1_2}**")
+                        if is_admin:
+                            opts_1 = ["請選擇勝者...", p1_1, p1_2]
+                            curr_1 = (
+                                p1_w if p1_w in opts_1 else "請選擇勝者..."
+                            )
+                            sel_1 = st.selectbox(
+                                "選擇冠軍賽勝者：",
+                                opts_1,
+                                index=opts_1.index(curr_1),
+                                key="p1_sel",
+                            )
+                            if sel_1 != "請選擇勝者..." and sel_1 != p1_w:
+                                loser_1 = p1_2 if sel_1 == p1_1 else p1_1
+                                df_finals.loc[
+                                    df_finals["階段"] == "冠軍賽", "勝者"
+                                ] = str(sel_1)
+                                df_finals.loc[
+                                    df_finals["階段"] == "冠軍賽", "敗者"
+                                ] = str(loser_1)
+                                save_finals(df_finals)
+                                st.rerun()
+                        else:
+                            st.write(f"勝者：`{p1_w if p1_w else '未決定'}`")
+
+                if p1_w and p3_w and p1_w != "" and p3_w != "":
+                    st.write("---")
+                    st.balloons()
+                    champion = df_finals.loc[
+                        df_finals["階段"] == "冠軍賽", "勝者"
+                    ].values[0]
+                    runner_up = df_finals.loc[
+                        df_finals["階段"] == "冠軍賽", "敗者"
+                    ].values[0]
+                    third_place = df_finals.loc[
+                        df_finals["階段"] == "季軍賽", "勝者"
+                    ].values[0]
+                    fourth_place = df_finals.loc[
+                        df_finals["階段"] == "季軍賽", "敗者"
+                    ].values[0]
+
+                    st.success(f"""
+                    ### 🎉 個人賽最終前 4 強榮譽榜：
+                    * 🥇 **冠軍**：{champion}
+                    * 🥈 **亞軍**：{runner_up}
+                    * 🥉 **季軍**：{third_place}
+                    * 🏅 **殿軍**：{fourth_place}
+                    """)
+
     # --- Tab 5: 戰績榜 ---
     with tab5:
         st.header("📊 即時選手戰績榜")
