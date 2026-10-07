@@ -107,7 +107,7 @@ def save_team_matches(df: Optional[pd.DataFrame]) -> None:
 @st.cache_data
 def load_team_finals() -> Optional[pd.DataFrame]:
     if os.path.exists(TEAM_FINALS_FILE):
-        df = pd.read_csv(TEAM_FINALS_FILE).fillna("")
+        return pd.read_csv(TEAM_FINALS_FILE).fillna("")
         for col in ["階段", "隊伍1", "隊伍2", "勝隊", "敗隊"]:
             if col in df.columns:
                 df[col] = df[col].astype(str)
@@ -305,7 +305,7 @@ is_admin = st.session_state["is_admin"]
 # 5. 主頁面：個人賽與團體賽切換
 # ==========================================
 main_tab1, main_tab2 = st.tabs(
-    ["👤 個人賽 (16人 3勝晉級八強)", "👥 團體賽 (8隊 兩組單循環+四強)"]
+    ["👤 個人賽 (16人 3勝晉級八強)", "👥 團體賽 (8隊 巔峰組/涅槃組+四強)"]
 )
 
 # ==========================================
@@ -313,7 +313,7 @@ main_tab1, main_tab2 = st.tabs(
 # ==========================================
 with main_tab2:
     st.title("👥 第四屆 三重盃戰鬥陀螺大賽 - 團體賽")
-    st.caption("【團體賽】8 隊分為紅藍兩組單循環 | 各組前 2 名晉級四強交叉淘汰賽")
+    st.caption("【團體賽】8 隊分為巔峰組、涅槃組單循環 | 各組前 2 名晉級四強交叉淘汰賽")
 
     t_tab1, t_tab2, t_tab3, t_tab4 = st.tabs([
         "📝 隊伍與選手登記",
@@ -356,10 +356,10 @@ with main_tab2:
                     )
 
                     group_tag = "⚪ 未分配"
-                    if curr_group == "紅組":
-                        group_tag = "🔴 紅組"
-                    elif curr_group == "藍組":
-                        group_tag = "🔵 藍組"
+                    if curr_group == "巔峰組":
+                        group_tag = "🔴 巔峰組"
+                    elif curr_group == "涅槃組":
+                        group_tag = "🔵 涅槃組"
 
                     c1, c2, c3 = st.columns([1, 2, 2])
                     with c1:
@@ -388,37 +388,37 @@ with main_tab2:
             st.write("---")
             col_draw, col_init = st.columns(2)
             with col_draw:
-                if st.button("🎲 隨機抽籤分配【紅組/藍組】", use_container_width=True):
+                if st.button("🎲 隨機抽籤分配【巔峰組/涅槃組】", use_container_width=True):
                     shuffled_teams = TEAM_NAMES.copy()
                     random.shuffle(shuffled_teams)
 
-                    red_teams = shuffled_teams[:4]
-                    blue_teams = shuffled_teams[4:]
+                    pinnacle_teams = shuffled_teams[:4]
+                    nirvana_teams = shuffled_teams[4:]
 
                     for t in TEAM_NAMES:
-                        g_val = "紅組" if t in red_teams else "藍組"
+                        g_val = "巔峰組" if t in pinnacle_teams else "涅槃組"
                         df_team_p.loc[df_team_p["組別"] == t, "分組"] = g_val
 
                     save_team_players(df_team_p)
                     save_team_matches(None)  # 重置賽程
                     save_team_finals(None)
-                    st.toast("🎲 隨機抽籤完成！紅藍組已重新分配！")
+                    st.toast("🎲 隨機抽籤完成！巔峰組與涅槃組已重新分配！")
                     st.rerun()
 
             with col_init:
                 if st.button(
                     "🚀 初始化團體賽對戰表", type="primary", use_container_width=True
                 ):
-                    red_teams = df_team_p[df_team_p["分組"] == "紅組"][
+                    pinnacle_teams = df_team_p[df_team_p["分組"] == "巔峰組"][
                         "組別"
                     ].tolist()
-                    blue_teams = df_team_p[df_team_p["分組"] == "藍組"][
+                    nirvana_teams = df_team_p[df_team_p["分組"] == "涅槃組"][
                         "組別"
                     ].tolist()
 
-                    if len(red_teams) != 4 or len(blue_teams) != 4:
+                    if len(pinnacle_teams) != 4 or len(nirvana_teams) != 4:
                         st.error(
-                            "❌ 請先點擊【🎲 隨機抽籤分配【紅組/藍組】】以確定紅藍組隊伍！"
+                            "❌ 請先點擊【🎲 隨機抽籤分配【巔峰組/涅槃組】】以確定分組隊伍！"
                         )
                     else:
 
@@ -432,12 +432,12 @@ with main_tab2:
                                 (teams[1], teams[2], label),
                             ]
 
-                        red_sched = make_schedule(red_teams, "紅組")
-                        blue_sched = make_schedule(blue_teams, "藍組")
+                        pinnacle_sched = make_schedule(pinnacle_teams, "巔峰組")
+                        nirvana_sched = make_schedule(nirvana_teams, "涅槃組")
 
                         t_matches = []
                         idx = 1
-                        for t1, t2, g_label in red_sched + blue_sched:
+                        for t1, t2, g_label in pinnacle_sched + nirvana_sched:
                             t_matches.append({
                                 "場次": idx,
                                 "分組": g_label,
@@ -521,13 +521,13 @@ with main_tab2:
             else 0
         )
 
-        red_teams = (
-            df_team_p[df_team_p["分組"] == "紅組"]["組別"].tolist()
+        pinnacle_teams = (
+            df_team_p[df_team_p["分組"] == "巔峰組"]["組別"].tolist()
             if not df_team_p.empty and "分組" in df_team_p.columns
             else []
         )
-        blue_teams = (
-            df_team_p[df_team_p["分組"] == "藍組"]["組別"].tolist()
+        nirvana_teams = (
+            df_team_p[df_team_p["分組"] == "涅槃組"]["組別"].tolist()
             if not df_team_p.empty and "分組" in df_team_p.columns
             else []
         )
@@ -535,20 +535,20 @@ with main_tab2:
         if (
             df_team_m is None
             or completed_tm < 12
-            or len(red_teams) != 4
-            or len(blue_teams) != 4
+            or len(pinnacle_teams) != 4
+            or len(nirvana_teams) != 4
         ):
             st.warning(f"⏳ 團體預賽尚未結束（已完成 {completed_tm}/12 場）")
         else:
-            _, _, ranked_a = calculate_group_standings(red_teams)
-            _, _, ranked_b = calculate_group_standings(blue_teams)
+            _, _, ranked_a = calculate_group_standings(pinnacle_teams)
+            _, _, ranked_b = calculate_group_standings(nirvana_teams)
 
             a1, a2 = ranked_a[0], ranked_a[1]
             b1, b2 = ranked_b[0], ranked_b[1]
 
             st.success(
-                f"🎉 四強晉級隊伍：紅組（第一名：{a1}、第二名：{a2}） |"
-                f" 藍組（第一名：{b1}、第二名：{b2}）"
+                f"🎉 四強晉級隊伍：巔峰組（第一名：{a1}、第二名：{a2}） |"
+                f" 涅槃組（第一名：{b1}、第二名：{b2}）"
             )
 
             if df_team_f is None or df_team_f.empty:
@@ -598,7 +598,7 @@ with main_tab2:
 
             with col_tf1:
                 st.markdown(
-                    f"##### ⚔️ 準決賽 1：**🔴 {a1} (紅1)** 🆚 **🔵 {b2} (藍2)**"
+                    f"##### ⚔️ 準決賽 1：**🔴 {a1} (巔峰1)** 🆚 **🔵 {b2} (涅槃2)**"
                 )
                 if is_admin:
                     opts_tf1 = ["請選擇勝隊...", a1, b2]
@@ -647,7 +647,7 @@ with main_tab2:
 
             with col_tf2:
                 st.markdown(
-                    f"##### ⚔️ 準決賽 2：**🔴 {b1} (藍1)** 🆚 **🔵 {a2} (紅2)**"
+                    f"##### ⚔️ 準決賽 2：**🔴 {b1} (涅槃1)** 🆚 **🔵 {a2} (巔峰2)**"
                 )
                 if is_admin:
                     opts_tf2 = ["請選擇勝隊...", b1, a2]
@@ -797,22 +797,22 @@ with main_tab2:
     with t_tab4:
         st.header("📊 團體賽小組積分榜")
         if df_team_m is not None:
-            red_teams = (
-                df_team_p[df_team_p["分組"] == "紅組"]["組別"].tolist()
+            pinnacle_teams = (
+                df_team_p[df_team_p["分組"] == "巔峰組"]["組別"].tolist()
                 if not df_team_p.empty and "分組" in df_team_p.columns
                 else []
             )
-            blue_teams = (
-                df_team_p[df_team_p["分組"] == "藍組"]["組別"].tolist()
+            nirvana_teams = (
+                df_team_p[df_team_p["分組"] == "涅槃組"]["組別"].tolist()
                 if not df_team_p.empty and "分組" in df_team_p.columns
                 else []
             )
 
-            if len(red_teams) == 4 and len(blue_teams) == 4:
+            if len(pinnacle_teams) == 4 and len(nirvana_teams) == 4:
                 c_a, c_b = st.columns(2)
                 with c_a:
-                    st.subheader("🔴 紅組 (Group A)")
-                    w_a, l_a, r_a = calculate_group_standings(red_teams)
+                    st.subheader("🔴 巔峰組 (Pinnacle Group)")
+                    w_a, l_a, r_a = calculate_group_standings(pinnacle_teams)
                     tb_a = [
                         {
                             "排名": f"第 {i} 名",
@@ -824,8 +824,8 @@ with main_tab2:
                     ]
                     st.table(tb_a)
                 with c_b:
-                    st.subheader("🔵 藍組 (Group B)")
-                    w_b, l_b, r_b = calculate_group_standings(blue_teams)
+                    st.subheader("🔵 涅槃組 (Nirvana Group)")
+                    w_b, l_b, r_b = calculate_group_standings(nirvana_teams)
                     tb_b = [
                         {
                             "排名": f"第 {i} 名",
@@ -837,7 +837,7 @@ with main_tab2:
                     ]
                     st.table(tb_b)
             else:
-                st.info("💡 請先進行【紅組/藍組】隨機抽籤分配與對戰表初始化！")
+                st.info("💡 請先進行【巔峰組/涅槃組】隨機抽籤分配與對戰表初始化！")
 
 # ==========================================
 # 👤 個人賽主區塊 (16人 3勝晉級八強)
