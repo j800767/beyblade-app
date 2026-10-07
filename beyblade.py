@@ -856,7 +856,7 @@ with main_tab1:
         "📊 即時戰績榜",
     ])
 
- # --- Tab 1: 報名與抽籤 ---
+# --- Tab 1: 報名與抽籤 ---
     with tab1:
         st.header("📝 選手報名 (限定 16 人)")
         if is_admin:
@@ -889,54 +889,48 @@ with main_tab1:
         st.subheader(f"👥 已報名選手名單 (共 {len(df_reg)} / 16 人)")
         if not df_reg.empty:
             if is_admin:
-                st.info("💡 提示：您可以勾選「刪除」欄位後點擊刪除按鈕，或直接編輯選手名稱！")
-                
-                # 建立動態編輯用的欄位
-                df_edit = df_reg[["編號", "選手名稱"]].copy()
-                df_edit.insert(0, "刪除", False)
-                
-                edited_df = st.data_editor(
-                    df_edit,
-                    column_config={
-                        "刪除": st.column_config.CheckboxColumn("刪除", default=False),
-                        "編號": st.column_config.NumberColumn("編號", disabled=True),
-                        "選手名稱": st.column_config.TextColumn("選手名稱", required=True),
-                    },
-                    use_container_width=True,
-                    hide_index=True,
-                    key="p_data_editor",
-                )
+                st.write("---")
+                col_m1, col_m2 = st.columns(2)
 
-                col_del, col_reset = st.columns([2, 2])
-                with col_del:
-                    if st.button("🗑️ 刪除選取選手", type="secondary", use_container_width=True):
-                        selected_rows = edited_df[edited_df["刪除"] == True]
-                        if selected_rows.empty:
-                            st.warning("請先勾選要刪除的選手！")
-                        else:
-                            # 留未被勾選刪除的選手
-                            remaining_df = edited_df[edited_df["刪除"] == False][["編號", "選手名稱"]]
-                            save_registrations(remaining_df)
-                            st.toast("已成功刪除選取的選手！")
-                            st.rerun()
+                # 個別刪除選單
+                with col_m1:
+                    st.markdown("#### 🗑️ 刪除指定選手")
+                    player_to_del = st.selectbox(
+                        "選擇要刪除的選手：",
+                        df_reg["選手名稱"].tolist(),
+                        key="sel_del_player",
+                    )
+                    if st.button("確認刪除該選手", type="secondary", use_container_width=True):
+                        df_reg = df_reg[df_reg["選手名稱"] != player_to_del].reset_index(drop=True)
+                        save_registrations(df_reg)
+                        st.toast(f"已刪除選手：{player_to_del}")
+                        st.rerun()
 
-                with col_reset:
-                    if st.button("⚠️ 清空所有選手名單", type="secondary", use_container_width=True):
+                # 一鍵清空
+                with col_m2:
+                    st.markdown("#### ⚠️ 重置清空名單")
+                    confirm_clear = st.checkbox("勾選以確認清空所有名單與賽程")
+                    if st.button(
+                        "⚠️ 清空所有選手名單",
+                        type="primary",
+                        use_container_width=True,
+                        disabled=not confirm_clear,
+                    ):
                         empty_df = pd.DataFrame(columns=["編號", "選手名稱"])
                         save_registrations(empty_df)
                         save_swiss_matches(None)
                         save_finals(None)
-                        st.toast("已清空選手名單與賽程資料！")
+                        st.toast("已清空所有名單與賽程資料！")
                         st.rerun()
 
-                # 檢查是否有直接修改選手名字
-                if not edited_df[["編號", "選手名稱"]].equals(df_reg[["編號", "選手名稱"]]):
-                    if st.button("💾 儲存修改名稱", type="primary", use_container_width=True):
-                        save_registrations(edited_df[["編號", "選手名稱"]])
-                        st.toast("選手名稱更新成功！")
-                        st.rerun()
+                st.write("---")
+                st.markdown("#### 📋 目前完整名單")
+                st.dataframe(df_reg[["編號", "選手名稱"]], use_container_width=True, hide_index=True)
+
             else:
                 st.dataframe(df_reg[["編號", "選手名稱"]], use_container_width=True, hide_index=True)
+        else:
+            st.info("目前尚未有選手報名。")
 
         if is_admin and len(df_reg) == 16 and (df_reg["編號"] == 0).all():
             st.write("---")
@@ -966,7 +960,6 @@ with main_tab1:
                 save_swiss_matches(pd.DataFrame(round1_matches))
                 st.success("🎉 16 人隨機抽籤完成！第 1 輪對戰已自動產生！")
                 st.rerun()
-
     # --- Tab 2: 控制台 ---
     with tab2:
         st.header("⚔️ 預賽：瑞士輪控制台 (3勝晉級八強 / 3敗淘汰)")
