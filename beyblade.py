@@ -10,7 +10,7 @@ import streamlit as st
 # 1. 基礎設定與檔案路徑
 # ==========================================
 st.set_page_config(
-    page_title="第三屆 三重盃 戰鬥陀螺大賽", page_icon="💥", layout="wide"
+    page_title="第四屆 三重盃 戰鬥陀螺大賽", page_icon="💥", layout="wide"
 )
 
 REG_FILE = "players_registration.csv"  # 個人賽選手名單 (16人)
