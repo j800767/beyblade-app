@@ -107,7 +107,7 @@ def save_team_matches(df: Optional[pd.DataFrame]) -> None:
 @st.cache_data
 def load_team_finals() -> Optional[pd.DataFrame]:
     if os.path.exists(TEAM_FINALS_FILE):
-        return pd.read_csv(TEAM_FINALS_FILE).fillna("")
+        df = pd.read_csv(TEAM_FINALS_FILE).fillna("")
         for col in ["階段", "隊伍1", "隊伍2", "勝隊", "敗隊"]:
             if col in df.columns:
                 df[col] = df[col].astype(str)
@@ -848,15 +848,16 @@ with main_tab1:
         "【個人賽】限定 16 人 瑞士輪淘汰賽 (率先滿 3 勝者晉級八強，先滿 3 敗者淘汰)"
     )
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab_tree, tab3, tab4, tab5 = st.tabs([
         "📝 選手報名與抽籤",
         "⚔️ 預賽：瑞士輪控制台",
-        "🗓️ 預賽賽程對戰表",
+        "🗺️ 瑞士輪對戰樹 (Swiss Flowchart)",
+        "🗓️ 預賽對戰紀錄",
         "🏆 決賽：八強單淘汰賽",
         "📊 即時戰績榜",
     ])
 
-# --- Tab 1: 報名與抽籤 ---
+    # --- Tab 1: 報名與抽籤 ---
     with tab1:
         st.header("📝 選手報名 (限定 16 人)")
         if is_admin:
@@ -960,6 +961,7 @@ with main_tab1:
                 save_swiss_matches(pd.DataFrame(round1_matches))
                 st.success("🎉 16 人隨機抽籤完成！第 1 輪對戰已自動產生！")
                 st.rerun()
+
     # --- Tab 2: 控制台 ---
     with tab2:
         st.header("⚔️ 預賽：瑞士輪控制台 (3勝晉級八強 / 3敗淘汰)")
@@ -1065,6 +1067,56 @@ with main_tab1:
                     st.success(
                         "🎉 八強晉級名單已滿 8 人！請至【決賽】頁面開打八強淘汰賽！"
                     )
+
+    # --- Tab 瑞士輪樹狀圖 (Flowchart) ---
+    with tab_tree:
+        st.header("🗺️ 瑞士輪賽程對戰樹 (Swiss Flowchart)")
+        st.caption("【英雄聯盟世界賽電競風格】依輪次與戰績分區橫向展示賽程全貌")
+
+        if df_swiss is None or df_swiss.empty:
+            st.info("⏳ 預賽尚未開始，請先完成 16 人抽籤並生成第 1 輪對戰！")
+        else:
+            current_max_r = int(df_swiss["輪次"].max())
+            cols = st.columns(5)
+
+            for r_idx in range(1, 6):
+                with cols[r_idx - 1]:
+                    st.markdown(f"### **第 {r_idx} 輪**")
+
+                    if r_idx <= current_max_r:
+                        r_df = df_swiss[df_swiss["輪次"] == r_idx]
+                        if r_df.empty:
+                            st.caption("尚無對戰")
+                        else:
+                            # 依戰績組別分塊顯示
+                            unique_groups = r_df["組別標籤"].unique()
+                            for g_tag in unique_groups:
+                                st.caption(f"📌 {g_tag}")
+                                g_matches = r_df[r_df["組別標籤"] == g_tag]
+
+                                for _, m_row in g_matches.iterrows():
+                                    p1_id = int(m_row["選手A_編號"])
+                                    p2_id = int(m_row["選手B_編號"])
+                                    w_id = int(m_row["勝者_編號"])
+
+                                    p1_name = f"{p1_id}號 {player_map.get(p1_id, '')}"
+                                    p2_name = f"{p2_id}號 {player_map.get(p2_id, '')}"
+
+                                    with st.container(border=True):
+                                        if w_id == p1_id:
+                                            st.markdown(f"🟢 **{p1_name}** 👑")
+                                            st.markdown(f"🔴 ~~{p2_name}~~")
+                                        elif w_id == p2_id:
+                                            st.markdown(f"🔴 ~~{p1_name}~~")
+                                            st.markdown(f"🟢 **{p2_name}** 👑")
+                                        else:
+                                            st.markdown(f"⚔️ {p1_name}")
+                                            st.markdown(f" 🆚 {p2_name}")
+                    else:
+                        st.caption("⏳ 尚未開打")
+                        with st.container(border=True):
+                            st.markdown("⚪ *TBD (待定)*")
+                            st.markdown("⚪ *TBD (待定)*")
 
     # --- Tab 3: 對戰表 ---
     with tab3:
