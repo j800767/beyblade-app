@@ -993,7 +993,7 @@ with main_tab1:
                 save_swiss_matches(pd.DataFrame(round1_matches))
                 st.success("🎉 16 人隨機抽籤完成！第 1 輪對戰已自動產生！")
                 st.rerun()
-    # --- Tab 2: 控制台 ---
+  # --- Tab 2: 控制台 ---
     with tab2:
         st.header("⚔️ 預賽：瑞士輪控制台 (3勝晉級八強 / 3敗淘汰)")
         if df_swiss is None or (df_reg["編號"] == 0).all():
@@ -1077,27 +1077,60 @@ with main_tab1:
                         )
                 st.write("---")
 
-            if is_admin and completed_r_count == total_r_matches:
-                if len(qualified) < 8 and len(active) >= 2:
-                    if st.button(
-                        f"🚀 生成第 {current_max_round + 1} 輪對戰"
-                        f" (剩餘 {len(active)} 人比賽中)",
-                        type="primary",
-                        use_container_width=True,
-                    ):
-                        next_m = generate_cutoff_next_round_pairs_16(
-                            current_max_round + 1
+            # 管理員控制按鈕區：下一輪生成 & 撤銷返回上一輪
+            if is_admin:
+                st.write("---")
+                col_next, col_back = st.columns(2)
+
+                with col_next:
+                    if completed_r_count == total_r_matches:
+                        if len(qualified) < 8 and len(active) >= 2:
+                            if st.button(
+                                f"🚀 生成第 {current_max_round + 1} 輪對戰"
+                                f" (剩餘 {len(active)} 人比賽中)",
+                                type="primary",
+                                use_container_width=True,
+                            ):
+                                next_m = generate_cutoff_next_round_pairs_16(
+                                    current_max_round + 1
+                                )
+                                df_swiss = pd.concat(
+                                    [df_swiss, pd.DataFrame(next_m)],
+                                    ignore_index=True,
+                                )
+                                save_swiss_matches(df_swiss)
+                                st.rerun()
+                        elif len(qualified) >= 8:
+                            st.success(
+                                "🎉 八強晉級名單已滿 8 人！請至【決賽】頁面開打八強淘汰賽！"
+                            )
+                    else:
+                        st.caption(
+                            f"⏳ 該輪尚有 {total_r_matches - completed_r_count} 場比賽未完賽，完成後方可生成下一輪。"
                         )
-                        df_swiss = pd.concat(
-                            [df_swiss, pd.DataFrame(next_m)],
-                            ignore_index=True,
-                        )
-                        save_swiss_matches(df_swiss)
-                        st.rerun()
-                elif len(qualified) >= 8:
-                    st.success(
-                        "🎉 八強晉級名單已滿 8 人！請至【決賽】頁面開打八強淘汰賽！"
-                    )
+
+                with col_back:
+                    if current_max_round > 1:
+                        if st.button(
+                            f"↩️ 刪除第 {current_max_round} 輪（返回第 {current_max_round - 1} 輪）",
+                            type="secondary",
+                            use_container_width=True,
+                        ):
+                            df_swiss = df_swiss[df_swiss["輪次"] != current_max_round]
+                            save_swiss_matches(df_swiss)
+                            st.toast(
+                                f"已刪除第 {current_max_round} 輪對戰，順利返回第 {current_max_round - 1} 輪！"
+                            )
+                            st.rerun()
+                    elif current_max_round == 1:
+                        if st.button(
+                            "↩️ 撤銷第 1 輪對戰（重置預賽對戰表）",
+                            type="secondary",
+                            use_container_width=True,
+                        ):
+                            save_swiss_matches(None)
+                            st.toast("已重置第 1 輪對戰，可重新產生盲抽！")
+                            st.rerun()
 
  # --- Tab 瑞士輪樹狀圖 (Flowchart) ---
     with tab_tree:
