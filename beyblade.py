@@ -857,7 +857,7 @@ with main_tab1:
         "📊 即時戰績榜",
     ])
 
-    # --- Tab 1: 報名與抽籤 ---
+ # --- Tab 1: 報名與抽籤 ---
     with tab1:
         st.header("📝 選手報名 (限定 16 人)")
         if is_admin:
@@ -891,9 +891,9 @@ with main_tab1:
         if not df_reg.empty:
             if is_admin:
                 st.write("---")
-                col_m1, col_m2 = st.columns(2)
+                col_m1, col_m2, col_m3 = st.columns(3)
 
-                # 個別刪除選單
+                # 1. 個別刪除選單
                 with col_m1:
                     st.markdown("#### 🗑️ 刪除指定選手")
                     player_to_del = st.selectbox(
@@ -907,8 +907,40 @@ with main_tab1:
                         st.toast(f"已刪除選手：{player_to_del}")
                         st.rerun()
 
-                # 一鍵清空
+                # 2. 調整與對調順序
                 with col_m2:
+                    st.markdown("#### 🔀 調整 / 交換順序")
+                    p_list = df_reg["選手名稱"].tolist()
+                    if len(p_list) >= 2:
+                        p_swap1 = st.selectbox("選手 A：", p_list, index=0, key="swap_p1")
+                        p_swap2 = st.selectbox("選手 B：", p_list, index=min(1, len(p_list)-1), key="swap_p2")
+                        
+                        btn_col1, btn_col2 = st.columns(2)
+                        with btn_col1:
+                            if st.button("🔄 對調位置", type="secondary", use_container_width=True):
+                                if p_swap1 == p_swap2:
+                                    st.warning("請選擇不同選手！")
+                                else:
+                                    idx1 = df_reg[df_reg["選手名稱"] == p_swap1].index[0]
+                                    idx2 = df_reg[df_reg["選手名稱"] == p_swap2].index[0]
+                                    df_reg.loc[idx1, "選手名稱"], df_reg.loc[idx2, "選手名稱"] = (
+                                        df_reg.loc[idx2, "選手名稱"],
+                                        df_reg.loc[idx1, "選手名稱"],
+                                    )
+                                    save_registrations(df_reg)
+                                    st.toast(f"已對調【{p_swap1}】與【{p_swap2}】！")
+                                    st.rerun()
+                        with btn_col2:
+                            if st.button("🎲 隨機洗牌", type="secondary", use_container_width=True):
+                                df_reg["選手名稱"] = df_reg["選手名稱"].sample(frac=1).values
+                                save_registrations(df_reg)
+                                st.toast("名單順序已重新隨機打散！")
+                                st.rerun()
+                    else:
+                        st.caption("至少需 2 位選手才能調整順序")
+
+                # 3. 一鍵清空
+                with col_m3:
                     st.markdown("#### ⚠️ 重置清空名單")
                     confirm_clear = st.checkbox("勾選以確認清空所有名單與賽程")
                     if st.button(
@@ -961,7 +993,6 @@ with main_tab1:
                 save_swiss_matches(pd.DataFrame(round1_matches))
                 st.success("🎉 16 人隨機抽籤完成！第 1 輪對戰已自動產生！")
                 st.rerun()
-
     # --- Tab 2: 控制台 ---
     with tab2:
         st.header("⚔️ 預賽：瑞士輪控制台 (3勝晉級八強 / 3敗淘汰)")
