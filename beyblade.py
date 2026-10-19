@@ -1068,7 +1068,7 @@ with main_tab1:
                         "🎉 八強晉級名單已滿 8 人！請至【決賽】頁面開打八強淘汰賽！"
                     )
 
-    # --- Tab 瑞士輪樹狀圖 (Flowchart) ---
+ # --- Tab 瑞士輪樹狀圖 (Flowchart) ---
     with tab_tree:
         st.header("🗺️ 瑞士輪賽程對戰樹 (Swiss Flowchart)")
         st.caption("【英雄聯盟世界賽電競風格】依輪次與戰績分區橫向展示賽程全貌")
@@ -1076,6 +1076,40 @@ with main_tab1:
         if df_swiss is None or df_swiss.empty:
             st.info("⏳ 預賽尚未開始，請先完成 16 人抽籤並生成第 1 輪對戰！")
         else:
+            (
+                wins,
+                losses,
+                qualified,
+                eliminated,
+                active,
+                _,
+            ) = calculate_swiss_cutoff_standings_16()
+
+            # 頂部即時晉級與淘汰戰報欄
+            col_q, col_e = st.columns(2)
+            with col_q:
+                q_names = (
+                    [f"{p}號 {player_map.get(p, '')}" for p in qualified]
+                    if qualified
+                    else ["尚無"]
+                )
+                st.success(
+                    f"🏆 **已確定晉級八強 ({len(qualified)}/8 人)**：\n\n"
+                    + "、".join(q_names)
+                )
+            with col_e:
+                e_names = (
+                    [f"{p}號 {player_map.get(p, '')}" for p in eliminated]
+                    if eliminated
+                    else ["尚無"]
+                )
+                st.error(
+                    f"❌ **已淘汰選手 ({len(eliminated)} 人)**：\n\n"
+                    + "、".join(e_names)
+                )
+
+            st.write("---")
+
             current_max_r = int(df_swiss["輪次"].max())
             cols = st.columns(5)
 
@@ -1106,9 +1140,17 @@ with main_tab1:
                                         if w_id == p1_id:
                                             st.markdown(f"🟢 **{p1_name}** 👑")
                                             st.markdown(f"🔴 ~~{p2_name}~~")
+                                            if wins[p1_id] >= 3:
+                                                st.caption("🎉 **晉級八強！**")
+                                            if losses[p2_id] >= 3:
+                                                st.caption("💀 **累積3敗淘汰**")
                                         elif w_id == p2_id:
                                             st.markdown(f"🔴 ~~{p1_name}~~")
                                             st.markdown(f"🟢 **{p2_name}** 👑")
+                                            if wins[p2_id] >= 3:
+                                                st.caption("🎉 **晉級八強！**")
+                                            if losses[p1_id] >= 3:
+                                                st.caption("💀 **累積3敗淘汰**")
                                         else:
                                             st.markdown(f"⚔️ {p1_name}")
                                             st.markdown(f" 🆚 {p2_name}")
