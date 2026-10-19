@@ -540,16 +540,68 @@ with main_tab2:
         ):
             st.warning(f"⏳ 團體預賽尚未結束（已完成 {completed_tm}/12 場）")
         else:
-            _, _, ranked_a = calculate_group_standings(pinnacle_teams)
-            _, _, ranked_b = calculate_group_standings(nirvana_teams)
+            w_a, l_a, ranked_a = calculate_group_standings(pinnacle_teams)
+            w_b, l_b, ranked_b = calculate_group_standings(nirvana_teams)
 
-            a1, a2 = ranked_a[0], ranked_a[1]
-            b1, b2 = ranked_b[0], ranked_b[1]
+            # 檢測巔峰組是否有平手（例如多隊皆為 1 勝 2 敗）
+            pinnacle_tie = w_a[ranked_a[1]] == w_a[ranked_a[2]]
+            # 檢測涅槃組是否有平手
+            nirvana_tie = w_b[ranked_b[1]] == w_b[ranked_b[2]]
 
-            st.success(
-                f"🎉 四強晉級隊伍：巔峰組（第一名：{a1}、第二名：{a2}） |"
-                f" 涅槃組（第一名：{b1}、第二名：{b2}）"
-            )
+            st.write("### 🥊 小組晉級狀態與加賽判定")
+            col_tie_a, col_tie_b = st.columns(2)
+
+            # 巔峰組晉級指定
+            with col_tie_a:
+                st.markdown("#### 🔴 巔峰組晉級隊伍")
+                a1 = ranked_a[0]
+                if pinnacle_tie:
+                    tied_teams_a = [
+                        t for t in pinnacle_teams if w_a[t] == w_a[ranked_a[1]]
+                    ]
+                    st.warning(
+                        f"⚠️ **偵測到戰績平手 ({w_a[ranked_a[1]]}勝)！**\n平手隊伍："
+                        f" {', '.join(tied_teams_a)}"
+                    )
+                    if is_admin:
+                        a2 = st.selectbox(
+                            "請選擇【巔峰組加賽獲勝隊伍】（第二名晉級）：",
+                            tied_teams_a,
+                            key="tie_override_a",
+                        )
+                    else:
+                        a2 = ranked_a[1]
+                        st.info(f"當前第二名：{a2} (請管理員進行加賽確認)")
+                else:
+                    a2 = ranked_a[1]
+                    st.success(f"第一名：**{a1}** | 第二名：**{a2}**")
+
+            # 涅槃組晉級指定
+            with col_tie_b:
+                st.markdown("#### 🔵 涅槃組晉級隊伍")
+                b1 = ranked_b[0]
+                if nirvana_tie:
+                    tied_teams_b = [
+                        t for t in nirvana_teams if w_b[t] == w_b[ranked_b[1]]
+                    ]
+                    st.warning(
+                        f"⚠️ **偵測到戰績平手 ({w_b[ranked_b[1]]}勝)！**\n平手隊伍："
+                        f" {', '.join(tied_teams_b)}"
+                    )
+                    if is_admin:
+                        b2 = st.selectbox(
+                            "請選擇【涅槃組加賽獲勝隊伍】（第二名晉級）：",
+                            tied_teams_b,
+                            key="tie_override_b",
+                        )
+                    else:
+                        b2 = ranked_b[1]
+                        st.info(f"當前第二名：{b2} (請管理員進行加賽確認)")
+                else:
+                    b2 = ranked_b[1]
+                    st.success(f"第一名：**{b1}** | 第二名：**{b2}**")
+
+            st.write("---")
 
             if df_team_f is None or df_team_f.empty:
                 finals_data = [
@@ -584,6 +636,12 @@ with main_tab2:
                 ]
                 df_team_f = pd.DataFrame(finals_data)
                 save_team_finals(df_team_f)
+            else:
+                # 動態更新準決賽隊伍為最新選擇的加賽結果
+                df_team_f.loc[df_team_f["階段"] == "準決賽1", "隊伍1"] = a1
+                df_team_f.loc[df_team_f["階段"] == "準決賽1", "隊伍2"] = b2
+                df_team_f.loc[df_team_f["階段"] == "準決賽2", "隊伍1"] = b1
+                df_team_f.loc[df_team_f["階段"] == "準決賽2", "隊伍2"] = a2
 
             sf1_w = df_team_f.loc[df_team_f["階段"] == "準決賽1", "勝隊"].values[
                 0
@@ -592,7 +650,6 @@ with main_tab2:
                 0
             ]
 
-            st.write("---")
             st.subheader("🥊 1. 準決賽 (Semi-Finals)")
             col_tf1, col_tf2 = st.columns(2)
 
@@ -857,7 +914,7 @@ with main_tab1:
         "📊 即時戰績榜",
     ])
 
- # --- Tab 1: 報名與抽籤 ---
+    # --- Tab 1: 報名與抽籤 ---
     with tab1:
         st.header("📝 選手報名 (限定 16 人)")
         if is_admin:
@@ -901,8 +958,12 @@ with main_tab1:
                         df_reg["選手名稱"].tolist(),
                         key="sel_del_player",
                     )
-                    if st.button("確認刪除該選手", type="secondary", use_container_width=True):
-                        df_reg = df_reg[df_reg["選手名稱"] != player_to_del].reset_index(drop=True)
+                    if st.button(
+                        "確認刪除該選手", type="secondary", use_container_width=True
+                    ):
+                        df_reg = df_reg[
+                            df_reg["選手名稱"] != player_to_del
+                        ].reset_index(drop=True)
                         save_registrations(df_reg)
                         st.toast(f"已刪除選手：{player_to_del}")
                         st.rerun()
@@ -912,27 +973,53 @@ with main_tab1:
                     st.markdown("#### 🔀 調整 / 交換順序")
                     p_list = df_reg["選手名稱"].tolist()
                     if len(p_list) >= 2:
-                        p_swap1 = st.selectbox("選手 A：", p_list, index=0, key="swap_p1")
-                        p_swap2 = st.selectbox("選手 B：", p_list, index=min(1, len(p_list)-1), key="swap_p2")
-                        
+                        p_swap1 = st.selectbox(
+                            "選手 A：", p_list, index=0, key="swap_p1"
+                        )
+                        p_swap2 = st.selectbox(
+                            "選手 B：",
+                            p_list,
+                            index=min(1, len(p_list) - 1),
+                            key="swap_p2",
+                        )
+
                         btn_col1, btn_col2 = st.columns(2)
                         with btn_col1:
-                            if st.button("🔄 對調位置", type="secondary", use_container_width=True):
+                            if st.button(
+                                "🔄 對調位置",
+                                type="secondary",
+                                use_container_width=True,
+                            ):
                                 if p_swap1 == p_swap2:
                                     st.warning("請選擇不同選手！")
                                 else:
-                                    idx1 = df_reg[df_reg["選手名稱"] == p_swap1].index[0]
-                                    idx2 = df_reg[df_reg["選手名稱"] == p_swap2].index[0]
-                                    df_reg.loc[idx1, "選手名稱"], df_reg.loc[idx2, "選手名稱"] = (
+                                    idx1 = df_reg[
+                                        df_reg["選手名稱"] == p_swap1
+                                    ].index[0]
+                                    idx2 = df_reg[
+                                        df_reg["選手名稱"] == p_swap2
+                                    ].index[0]
+                                    (
+                                        df_reg.loc[idx1, "選手名稱"],
+                                        df_reg.loc[idx2, "選手名稱"],
+                                    ) = (
                                         df_reg.loc[idx2, "選手名稱"],
                                         df_reg.loc[idx1, "選手名稱"],
                                     )
                                     save_registrations(df_reg)
-                                    st.toast(f"已對調【{p_swap1}】與【{p_swap2}】！")
+                                    st.toast(
+                                        f"已對調【{p_swap1}】與【{p_swap2}】！"
+                                    )
                                     st.rerun()
                         with btn_col2:
-                            if st.button("🎲 隨機洗牌", type="secondary", use_container_width=True):
-                                df_reg["選手名稱"] = df_reg["選手名稱"].sample(frac=1).values
+                            if st.button(
+                                "🎲 隨機洗牌",
+                                type="secondary",
+                                use_container_width=True,
+                            ):
+                                df_reg["選手名稱"] = df_reg[
+                                    "選手名稱"
+                                ].sample(frac=1).values
                                 save_registrations(df_reg)
                                 st.toast("名單順序已重新隨機打散！")
                                 st.rerun()
@@ -958,10 +1045,18 @@ with main_tab1:
 
                 st.write("---")
                 st.markdown("#### 📋 目前完整名單")
-                st.dataframe(df_reg[["編號", "選手名稱"]], use_container_width=True, hide_index=True)
+                st.dataframe(
+                    df_reg[["編號", "選手名稱"]],
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
             else:
-                st.dataframe(df_reg[["編號", "選手名稱"]], use_container_width=True, hide_index=True)
+                st.dataframe(
+                    df_reg[["編號", "選手名稱"]],
+                    use_container_width=True,
+                    hide_index=True,
+                )
         else:
             st.info("目前尚未有選手報名。")
 
@@ -993,7 +1088,8 @@ with main_tab1:
                 save_swiss_matches(pd.DataFrame(round1_matches))
                 st.success("🎉 16 人隨機抽籤完成！第 1 輪對戰已自動產生！")
                 st.rerun()
-  # --- Tab 2: 控制台 ---
+
+    # --- Tab 2: 控制台 ---
     with tab2:
         st.header("⚔️ 預賽：瑞士輪控制台 (3勝晉級八強 / 3敗淘汰)")
         if df_swiss is None or (df_reg["編號"] == 0).all():
@@ -1116,7 +1212,9 @@ with main_tab1:
                             type="secondary",
                             use_container_width=True,
                         ):
-                            df_swiss = df_swiss[df_swiss["輪次"] != current_max_round]
+                            df_swiss = df_swiss[
+                                df_swiss["輪次"] != current_max_round
+                            ]
                             save_swiss_matches(df_swiss)
                             st.toast(
                                 f"已刪除第 {current_max_round} 輪對戰，順利返回第 {current_max_round - 1} 輪！"
@@ -1132,7 +1230,7 @@ with main_tab1:
                             st.toast("已重置第 1 輪對戰，可重新產生盲抽！")
                             st.rerun()
 
- # --- Tab 瑞士輪樹狀圖 (Flowchart) ---
+    # --- Tab 瑞士輪樹狀圖 (Flowchart) ---
     with tab_tree:
         st.header("🗺️ 瑞士輪賽程對戰樹 (Swiss Flowchart)")
         st.caption("【英雄聯盟世界賽電競風格】依輪次與戰績分區橫向展示賽程全貌")
