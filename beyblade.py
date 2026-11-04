@@ -47,7 +47,12 @@ def save_registrations(df: pd.DataFrame) -> None:
 @st.cache_data
 def load_swiss_matches() -> Optional[pd.DataFrame]:
     if os.path.exists(SWISS_MATCH_FILE):
-        return pd.read_csv(SWISS_MATCH_FILE).fillna("")
+        df = pd.read_csv(SWISS_MATCH_FILE).fillna(0)
+        if "選手A_得分" not in df.columns:
+            df["選手A_得分"] = 0
+        if "選手B_得分" not in df.columns:
+            df["選手B_得分"] = 0
+        return df
     return None
 
 
@@ -153,16 +158,19 @@ player_map = (
 
 
 # ==========================================
-# 3. 計算邏輯 (瑞士輪 + 抗快分 Buchholz & 團體小組賽)
+# 3. 計算邏輯 (瑞士輪 + 抗快分 + 比分得失分)
 # ==========================================
 def calculate_swiss_cutoff_standings() -> Tuple[
-    Dict[int, int],
-    Dict[int, int],
-    Dict[int, int],
-    List[int],
-    List[int],
-    List[int],
-    Set[Tuple[int, int]],
+    Dict[int, int],  # wins
+    Dict[int, int],  # losses
+    Dict[int, int],  # buchholz
+    Dict[int, int],  # point_diff
+    Dict[int, int],  # scores_for
+    Dict[int, int],  # scores_against
+    List[int],  # qualified
+    List[int],  # eliminated
+    List[int],  # active
+    Set[Tuple[int, int]],  # played_pairs
 ]:
     total_p = len(df_reg) if not df_reg.empty else 18
     player_ids = (
@@ -174,13 +182,17 @@ def calculate_swiss_cutoff_standings() -> Tuple[
     wins = {p_id: 0 for p_id in player_ids}
     losses = {p_id: 0 for p_id in player_ids}
     opponents = {p_id: set() for p_id in player_ids}
+    scores_for = {p_id: 0 for p_id in player_ids}
+    scores_against = {p_id: 0 for p_id in player_ids}
     played_pairs = set()
 
     if df_swiss is not None and not df_swiss.empty:
         for _, r in df_swiss.iterrows():
-            w = int(r["勝者_編號"]) if r["勝者_編號"] != "" else 0
-            p1 = int(r["選手A_編號"]) if r["選手A_編號"] != "" else 0
-            p2 = int(r["選手B_編號"]) if r["選手B_編號"] != "" else 0
+            w = int(r["勝者_編號"]) if r["勝者_編號"] not in ["", 0] else 0
+            p1 = int(r["選手A_編號"]) if r["選手A_編號"] not in ["", 0] else 0
+            p2 = int(r["選手B_編號"]) if r["選手B_編號"] not in ["", 0] else 0
+            s1 = int(r["選手A_得分"]) if "選手A_得分" in r and r["選手A_得分"] != "" else 0
+            s2 = int(r["選手B_得分"]) if "選手B_得分" in r and r["選手B_得分"] != "" else 0
 
             if p1 != 0 and p2 != 0:
                 played_pairs.add(tuple(sorted([p1, p2])))
@@ -188,6 +200,13 @@ def calculate_swiss_cutoff_standings() -> Tuple[
                     opponents[p1].add(p2)
                 if p2 in opponents:
                     opponents[p2].add(p1)
+
+                if p1 in scores_for:
+                    scores_for[p1] += s1
+                    scores_against[p1] += s2
+                if p2 in scores_for:
+                    scores_for[p2] += s2
+                    scores_against[p2] += s1
 
             if w != 0:
                 l = p2 if w == p1 else p1
@@ -198,8 +217,10 @@ def calculate_swiss_cutoff_standings() -> Tuple[
 
     # 抗快分 (Buchholz): 所有對手總勝數加總
     buchholz = {}
+    point_diff = {}
     for p_id in player_ids:
         buchholz[p_id] = sum(wins.get(opp, 0) for opp in opponents[p_id])
+        point_diff[p_id] = scores_for[p_id] - scores_against[p_id]
 
     qualified = []
     eliminated = []
@@ -213,16 +234,31 @@ def calculate_swiss_cutoff_standings() -> Tuple[
         else:
             active.append(p_id)
 
-    # 排序規則：勝場(大) -> 敗場(小) -> 抗快分(大)
-    qualified.sort(
-        key=lambda x: (wins[x], -losses[x], buchholz[x]), reverse=True
-    )
-    active.sort(key=lambda x: (wins[x], -losses[x], buchholz[x]), reverse=True)
-    eliminated.sort(
-        key=lambda x: (wins[x], -losses[x], buchholz[x]), reverse=True
+    # 排序規則：勝場(大) -> 敗場(小) -> 抗快分(大) -> 得失分差(大) -> 總得分(大)
+    sort_key = lambda x: (
+        wins[x],
+        -losses[x],
+        buchholz[x],
+        point_diff[x],
+        scores_for[x],
     )
 
-    return wins, losses, buchholz, qualified, eliminated, active, played_pairs
+    qualified.sort(key=sort_key, reverse=True)
+    active.sort(key=sort_key, reverse=True)
+    eliminated.sort(key=sort_key, reverse=True)
+
+    return (
+        wins,
+        losses,
+        buchholz,
+        point_diff,
+        scores_for,
+        scores_against,
+        qualified,
+        eliminated,
+        active,
+        played_pairs,
+    )
 
 
 def generate_cutoff_next_round_pairs(current_round: int) -> List[Dict]:
@@ -230,6 +266,9 @@ def generate_cutoff_next_round_pairs(current_round: int) -> List[Dict]:
         wins,
         losses,
         buchholz,
+        point_diff,
+        scores_for,
+        scores_against,
         qualified,
         eliminated,
         active,
@@ -286,6 +325,8 @@ def generate_cutoff_next_round_pairs(current_round: int) -> List[Dict]:
             "選手A_編號": p1,
             "選手B_編號": p2,
             "勝者_編號": 0,
+            "選手A_得分": 0,
+            "選手B_得分": 0,
         })
 
     return match_data
@@ -950,11 +991,11 @@ with main_tab1:
 
     tab1, tab2, tab_tree, tab3, tab4, tab5 = st.tabs([
         "📝 選手報名與抽籤",
-        "⚔️ 預賽：瑞士輪控制台",
+        "⚔️ 預賽：瑞士輪控制台 (比分登記)",
         "🗺️ 瑞士輪對戰樹 (Swiss Flowchart)",
         "🗓️ 預賽對戰紀錄",
         "🏆 決賽 & 18人外卡附加賽",
-        "📊 即時戰績榜 (含抗快分)",
+        "📊 即時戰績榜 (含得失分與抗快分)",
     ])
 
     # --- Tab 1: 報名與抽籤 ---
@@ -993,7 +1034,6 @@ with main_tab1:
                 st.write("---")
                 col_m1, col_m2, col_m3 = st.columns(3)
 
-                # 1. 個別刪除選單
                 with col_m1:
                     st.markdown("#### 🗑️ 刪除指定選手")
                     player_to_del = st.selectbox(
@@ -1011,7 +1051,6 @@ with main_tab1:
                         st.toast(f"已刪除選手：{player_to_del}")
                         st.rerun()
 
-                # 2. 調整與對調順序
                 with col_m2:
                     st.markdown("#### 🔀 調整 / 交換順序")
                     p_list = df_reg["選手名稱"].tolist()
@@ -1069,7 +1108,6 @@ with main_tab1:
                     else:
                         st.caption("至少需 2 位選手才能調整順序")
 
-                # 3. 一鍵清空
                 with col_m3:
                     st.markdown("#### ⚠️ 重置清空名單")
                     confirm_clear = st.checkbox("勾選以確認清空所有名單與賽程")
@@ -1127,6 +1165,8 @@ with main_tab1:
                         "選手A_編號": p_ids[i],
                         "選手B_編號": p_ids[i + 1],
                         "勝者_編號": 0,
+                        "選手A_得分": 0,
+                        "選手B_得分": 0,
                     })
 
                 save_swiss_matches(pd.DataFrame(round1_matches))
@@ -1135,7 +1175,7 @@ with main_tab1:
 
     # --- Tab 2: 控制台 ---
     with tab2:
-        st.header("⚔️ 預賽：瑞士輪控制台 (3勝晉級/外卡區 | 3敗淘汰)")
+        st.header("⚔️ 預賽：瑞士輪控制台 (比分登記與比序)")
         if df_swiss is None or (df_reg["編號"] == 0).all():
             st.warning("⏳ 請先完成選手報名與盲抽！")
         else:
@@ -1143,6 +1183,9 @@ with main_tab1:
                 wins,
                 losses,
                 buchholz,
+                point_diff,
+                scores_for,
+                scores_against,
                 qualified,
                 eliminated,
                 active,
@@ -1151,12 +1194,15 @@ with main_tab1:
 
             current_max_round = int(df_swiss["輪次"].max())
             r_matches = df_swiss[df_swiss["輪次"] == current_max_round]
-            completed_r_count = sum(1 for w in r_matches["勝者_編號"] if w != 0)
+            completed_r_count = sum(
+                1 for w in r_matches["勝者_編號"] if w not in [0, "0", ""]
+            )
             total_r_matches = len(r_matches)
 
             if qualified:
                 q_list = [
-                    f"{p}號 {player_map.get(p, '')}(抗快分:{buchholz[p]})"
+                    f"{p}號"
+                    f" {player_map.get(p, '')}(抗快:{buchholz[p]}|差:{point_diff[p]:+d})"
                     for p in qualified
                 ]
                 qualified_str = ", ".join(q_list)
@@ -1181,6 +1227,9 @@ with main_tab1:
                     int(row["選手B_編號"]),
                     int(row["勝者_編號"]),
                 )
+                s1_curr = int(row.get("選手A_得分", 0))
+                s2_curr = int(row.get("選手B_得分", 0))
+
                 p1_str = f"{p1_id}號 {player_map.get(p1_id, '')}"
                 p2_str = f"{p2_id}號 {player_map.get(p2_id, '')}"
 
@@ -1192,33 +1241,55 @@ with main_tab1:
                 if is_admin:
                     c1, c2, c3 = st.columns([2, 2, 3])
                     with c1:
-                        if st.button(
-                            f"🏆 {p1_str} 獲勝",
-                            key=f"r{current_max_round}_{m_idx}_p1",
-                            use_container_width=True,
-                            type="primary"
-                            if w_id == p1_id
-                            else "secondary",
-                        ):
-                            df_swiss.at[m_idx, "勝者_編號"] = p1_id
-                            save_swiss_matches(df_swiss)
-                            st.rerun()
-                    with c2:
-                        if st.button(
-                            f"🏆 {p2_str} 獲勝",
-                            key=f"r{current_max_round}_{m_idx}_p2",
-                            use_container_width=True,
-                            type="primary"
-                            if w_id == p2_id
-                            else "secondary",
-                        ):
-                            df_swiss.at[m_idx, "勝者_編號"] = p2_id
-                            save_swiss_matches(df_swiss)
-                            st.rerun()
-                    with c3:
-                        st.caption(
-                            f"勝者： `{player_map.get(w_id, '未登記')}`"
+                        s1_val = st.number_input(
+                            f"🔴 {p1_str} 得分",
+                            min_value=0,
+                            max_value=20,
+                            value=s1_curr,
+                            key=f"score_a_{current_max_round}_{m_idx}",
                         )
+                    with c2:
+                        s2_val = st.number_input(
+                            f"🔵 {p2_str} 得分",
+                            min_value=0,
+                            max_value=20,
+                            value=s2_curr,
+                            key=f"score_b_{current_max_round}_{m_idx}",
+                        )
+                    with c3:
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        if st.button(
+                            "💾 儲存比分與結果",
+                            key=f"save_match_{current_max_round}_{m_idx}",
+                            type="primary" if w_id != 0 else "secondary",
+                            use_container_width=True,
+                        ):
+                            if s1_val == s2_val:
+                                st.error("❌ 比分不能平手！請輸入勝負分數")
+                            else:
+                                winner_id = p1_id if s1_val > s2_val else p2_id
+                                df_swiss.at[m_idx, "選手A_得分"] = s1_val
+                                df_swiss.at[m_idx, "選手B_得分"] = s2_val
+                                df_swiss.at[m_idx, "勝者_編號"] = winner_id
+                                save_swiss_matches(df_swiss)
+                                st.toast(
+                                    f"比分儲存成功！勝者：{player_map.get(winner_id,'')}"
+                                )
+                                st.rerun()
+
+                    if w_id != 0:
+                        st.caption(
+                            f"目前紀錄：`{s1_curr} : {s2_curr}` ｜ 勝者："
+                            f" `{player_map.get(w_id, '')}`"
+                        )
+                else:
+                    if w_id != 0:
+                        st.write(
+                            f"比賽結果：`{s1_curr} : {s2_curr}` ｜"
+                            f" 勝者：`{player_map.get(w_id, '')}`"
+                        )
+                    else:
+                        st.write("比賽結果：`比賽中 / 尚未開打`")
                 st.write("---")
 
             if is_admin:
@@ -1289,6 +1360,9 @@ with main_tab1:
                 wins,
                 losses,
                 buchholz,
+                point_diff,
+                scores_for,
+                scores_against,
                 qualified,
                 eliminated,
                 active,
@@ -1299,7 +1373,8 @@ with main_tab1:
             with col_q:
                 q_names = (
                     [
-                        f"{p}號 {player_map.get(p, '')}(抗快:{buchholz[p]})"
+                        f"{p}號"
+                        f" {player_map.get(p, '')}(抗快:{buchholz[p]}|差:{point_diff[p]:+d})"
                         for p in qualified
                     ]
                     if qualified
@@ -1343,21 +1418,31 @@ with main_tab1:
                                     p1_id = int(m_row["選手A_編號"])
                                     p2_id = int(m_row["選手B_編號"])
                                     w_id = int(m_row["勝者_編號"])
+                                    s1 = int(m_row.get("選手A_得分", 0))
+                                    s2 = int(m_row.get("選手B_得分", 0))
 
                                     p1_name = f"{p1_id}號 {player_map.get(p1_id, '')}"
                                     p2_name = f"{p2_id}號 {player_map.get(p2_id, '')}"
 
                                     with st.container(border=True):
                                         if w_id == p1_id:
-                                            st.markdown(f"🟢 **{p1_name}** 👑")
-                                            st.markdown(f"🔴 ~~{p2_name}~~")
+                                            st.markdown(
+                                                f"🟢 **{p1_name}** ({s1}) 👑"
+                                            )
+                                            st.markdown(
+                                                f"🔴 ~~{p2_name}~~ ({s2})"
+                                            )
                                             if wins[p1_id] >= 3:
                                                 st.caption("🎉 **取得第3勝！**")
                                             if losses[p2_id] >= 3:
                                                 st.caption("💀 **累積3敗淘汰**")
                                         elif w_id == p2_id:
-                                            st.markdown(f"🔴 ~~{p1_name}~~")
-                                            st.markdown(f"🟢 **{p2_name}** 👑")
+                                            st.markdown(
+                                                f"🔴 ~~{p1_name}~~ ({s1})"
+                                            )
+                                            st.markdown(
+                                                f"🟢 **{p2_name}** ({s2}) 👑"
+                                            )
                                             if wins[p2_id] >= 3:
                                                 st.caption("🎉 **取得第3勝！**")
                                             if losses[p1_id] >= 3:
@@ -1373,7 +1458,7 @@ with main_tab1:
 
     # --- Tab 3: 對戰紀錄 ---
     with tab3:
-        st.header("🗓️ 預賽對戰紀錄")
+        st.header("🗓️ 預賽對戰紀錄 (含小局比分)")
         if df_swiss is not None:
             for r in range(1, int(df_swiss["輪次"].max()) + 1):
                 st.subheader(f"🌀 第 {r} 輪")
@@ -1385,10 +1470,16 @@ with main_tab1:
                         int(row["選手B_編號"]),
                         int(row["勝者_編號"]),
                     )
+                    s1 = int(row.get("選手A_得分", 0))
+                    s2 = int(row.get("選手B_得分", 0))
+
                     disp.append({
                         "組別": row["組別標籤"],
                         "選手 A": f"{p1_id}號 {player_map.get(p1_id, '')}",
                         "選手 B": f"{p2_id}號 {player_map.get(p2_id, '')}",
+                        "對戰比分": (
+                            f"{s1} : {s2}" if w_id != 0 else "⏳ 未完賽"
+                        ),
                         "獲勝者": (
                             player_map.get(w_id, "⏳ 待定")
                             if w_id != 0
@@ -1408,6 +1499,9 @@ with main_tab1:
             wins,
             losses,
             buchholz,
+            point_diff,
+            scores_for,
+            scores_against,
             qualified,
             eliminated,
             active,
@@ -1423,7 +1517,6 @@ with main_tab1:
 
             final_8_players = []
 
-            # 人數處理邏輯（18 人常規狀況為 9 人 3 勝）
             if len(qualified) == 8:
                 final_8_players = qualified.copy()
                 st.info("💡 剛好 8 人 3 勝晉級，無需進行外卡賽，直通八強！")
@@ -1440,7 +1533,7 @@ with main_tab1:
                     ])
                     + f"""
                 * ⚔️ **第 8 名 🆚 第 9 名 (爭奪最後 1 張八強門票)**：
-                  * **外卡生死戰**：{p8}號 {player_map.get(p8,'')} 🆚 {p9}號 {player_map.get(p9,'')}
+                  * **外卡生死戰**：{p8}號 {player_map.get(p8,'')} (差:{point_diff[p8]:+d}) 🆚 {p9}號 {player_map.get(p9,'')} (差:{point_diff[p9]:+d})
                 """
                 )
 
@@ -1911,14 +2004,17 @@ with main_tab1:
             else:
                 st.info("⏳ 請先完成外卡戰以判定最終 8 強團隊！")
 
-    # --- Tab 5: 戰績榜 (含抗快分) ---
+    # --- Tab 5: 戰績榜 (含得失分) ---
     with tab5:
-        st.header("📊 即時選手戰績榜 (依勝場 ➔ 敗場 ➔ 抗快分 Buchholz 排序)")
+        st.header("📊 即時戰績榜 (依 勝 ➔ 敗 ➔ 抗快 ➔ 得失分 排序)")
         if df_swiss is not None:
             (
                 wins,
                 losses,
                 buchholz,
+                point_diff,
+                scores_for,
+                scores_against,
                 qualified,
                 eliminated,
                 active,
@@ -1934,7 +2030,13 @@ with main_tab1:
 
             all_p_sorted = sorted(
                 p_ids,
-                key=lambda x: (wins[x], -losses[x], buchholz[x]),
+                key=lambda x: (
+                    wins[x],
+                    -losses[x],
+                    buchholz[x],
+                    point_diff[x],
+                    scores_for[x],
+                ),
                 reverse=True,
             )
 
@@ -1961,6 +2063,9 @@ with main_tab1:
                     "勝場": wins[p_id],
                     "敗場": losses[p_id],
                     "抗快分 (Buchholz)": buchholz[p_id],
+                    "總得分": scores_for[p_id],
+                    "總失分": scores_against[p_id],
+                    "得失分差": f"{point_diff[p_id]:+d}",
                     "當前狀態": st_str,
                 })
             st.table(tb)
