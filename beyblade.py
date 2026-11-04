@@ -13,7 +13,7 @@ st.set_page_config(
     page_title="第四屆 三重盃 戰鬥陀螺大賽", page_icon="💥", layout="wide"
 )
 
-REG_FILE = "players_registration.csv"  # 個人賽選手名單 (上限20人)
+REG_FILE = "players_registration.csv"  # 個人賽選手名單 (上限18人)
 SWISS_MATCH_FILE = "swiss_matches.csv"  # 個人賽瑞士輪賽程檔案
 FINALS_FILE = "finals_matches.csv"  # 個人賽八強單淘汰檔案
 PLAYIN_FILE = "playin_matches.csv"  # 外卡附加賽檔案
@@ -164,7 +164,7 @@ def calculate_swiss_cutoff_standings() -> Tuple[
     List[int],
     Set[Tuple[int, int]],
 ]:
-    total_p = len(df_reg) if not df_reg.empty else 20
+    total_p = len(df_reg) if not df_reg.empty else 18
     player_ids = (
         [int(p) for p in df_reg["編號"] if p != 0]
         if not df_reg.empty and (df_reg["編號"] != 0).any()
@@ -352,7 +352,7 @@ is_admin = st.session_state["is_admin"]
 # 5. 主頁面：個人賽與團體賽切換
 # ==========================================
 main_tab1, main_tab2 = st.tabs(
-    ["👤 個人賽 (上限20人 3勝晉級/外卡)", "👥 團體賽 (8隊 巔峰組/涅槃組+四強)"]
+    ["👤 個人賽 (限定18人 3勝晉級/外卡)", "👥 團體賽 (8隊 巔峰組/涅槃組+四強)"]
 )
 
 # ==========================================
@@ -939,12 +939,12 @@ with main_tab2:
                 st.info("💡 請先進行【巔峰組/涅槃組】隨機抽籤分配與對戰表初始化！")
 
 # ==========================================
-# 👤 個人賽主區塊 (上限20人 3勝晉級/外卡)
+# 👤 個人賽主區塊 (限定18人 3勝晉級/外卡)
 # ==========================================
 with main_tab1:
     st.title("💥 第四屆 三重盃戰鬥陀螺大賽 - 個人賽")
     st.caption(
-        "【個人賽】限定 20 人 瑞士輪淘汰賽 (率先滿 3 勝者進入晉級區/外卡戰，先滿 3"
+        "【個人賽】限定 18 人 瑞士輪淘汰賽 (率先滿 3 勝者進入晉級區/外卡戰，先滿 3"
         " 敗者淘汰)"
     )
 
@@ -953,15 +953,15 @@ with main_tab1:
         "⚔️ 預賽：瑞士輪控制台",
         "🗺️ 瑞士輪對戰樹 (Swiss Flowchart)",
         "🗓️ 預賽對戰紀錄",
-        "🏆 決賽 & 外卡附加賽",
+        "🏆 決賽 & 18人外卡附加賽",
         "📊 即時戰績榜 (含抗快分)",
     ])
 
     # --- Tab 1: 報名與抽籤 ---
     with tab1:
-        st.header("📝 選手報名 (上限 20 人)")
+        st.header("📝 選手報名 (限定 18 人)")
         if is_admin:
-            with st.form("reg_form_20", clear_on_submit=True):
+            with st.form("reg_form_18", clear_on_submit=True):
                 col_name, col_btn = st.columns([3, 1])
                 with col_name:
                     name = st.text_input("輸入選手名稱*")
@@ -976,8 +976,8 @@ with main_tab1:
                         st.error("❌ 名稱不能為空！")
                     elif name.strip() in df_reg["選手名稱"].values:
                         st.error(f"❌ 選手【{name}】已在名單中！")
-                    elif len(df_reg) >= 20:
-                        st.error("❌ 個人賽上限 20 人，已滿額！")
+                    elif len(df_reg) >= 18:
+                        st.error("❌ 個人賽限定 18 人，已滿額！")
                     else:
                         new_p = {"編號": 0, "選手名稱": name.strip()}
                         df_reg = pd.concat(
@@ -987,7 +987,7 @@ with main_tab1:
                         st.success(f"🎉 選手【{name}】報名成功！")
                         st.rerun()
 
-        st.subheader(f"👥 已報名選手名單 (共 {len(df_reg)} / 20 人)")
+        st.subheader(f"👥 已報名選手名單 (共 {len(df_reg)} / 18 人)")
         if not df_reg.empty:
             if is_admin:
                 st.write("---")
@@ -1104,24 +1104,23 @@ with main_tab1:
         else:
             st.info("目前尚未有選手報名。")
 
-        if is_admin and len(df_reg) >= 12 and (df_reg["編號"] == 0).all():
+        if is_admin and len(df_reg) == 18 and (df_reg["編號"] == 0).all():
             st.write("---")
-            curr_count = len(df_reg)
             if st.button(
-                f"🎲 確定隨機產生 1~{curr_count} 號編號與第 1 輪對戰",
+                "🎲 確定隨機產生 1~18 號編號與第 1 輪對戰",
                 type="primary",
                 use_container_width=True,
             ):
                 shuffled_df = df_reg.sample(frac=1).reset_index(drop=True)
-                shuffled_df["編號"] = list(range(1, curr_count + 1))
+                shuffled_df["編號"] = list(range(1, 19))
                 df_reg = shuffled_df
                 save_registrations(df_reg)
 
-                p_ids = list(range(1, curr_count + 1))
+                p_ids = list(range(1, 19))
                 random.shuffle(p_ids)
 
                 round1_matches = []
-                for i in range(0, curr_count, 2):
+                for i in range(0, 18, 2):
                     round1_matches.append({
                         "輪次": 1,
                         "組別標籤": "戰績 0-0 區",
@@ -1131,7 +1130,7 @@ with main_tab1:
                     })
 
                 save_swiss_matches(pd.DataFrame(round1_matches))
-                st.success(f"🎉 {curr_count} 人隨機抽籤完成！第 1 輪對戰已自動產生！")
+                st.success("🎉 18 人隨機抽籤完成！第 1 輪對戰已自動產生！")
                 st.rerun()
 
     # --- Tab 2: 控制台 ---
@@ -1246,7 +1245,7 @@ with main_tab1:
                                 st.rerun()
                         else:
                             st.success(
-                                "🎉 預賽瑞士輪階段已結束！請至【決賽 & 外卡附加賽】查看晉級與外卡戰！"
+                                "🎉 預賽瑞士輪階段已結束！請至【決賽 & 18人外卡附加賽】查看晉級與外卡戰！"
                             )
                     else:
                         st.caption(
@@ -1402,9 +1401,9 @@ with main_tab1:
                     hide_index=True,
                 )
 
-    # --- Tab 4: 決賽 & 外卡附加賽 ---
+    # --- Tab 4: 決賽 & 18人外卡賽 ---
     with tab4:
-        st.header("🏆 決賽 & 外卡附加賽 (Play-In Match)")
+        st.header("🏆 決賽 & 18人外卡附加賽 (Play-In Match)")
         (
             wins,
             losses,
@@ -1422,112 +1421,71 @@ with main_tab1:
         else:
             st.success(f"🎉 預賽已有 {len(qualified)} 位選手取得 3 勝！")
 
-            # 判定名次 (已自動依 勝場 -> 敗場 -> 抗快分 排序)
-            top_6 = qualified[:6]
-            playin_candidates = qualified[6:10]  # 第 7~10 名爭奪外卡
-
             final_8_players = []
 
-            # 如果人數剛好 8 人 (例如 16人賽制)
+            # 人數處理邏輯（18 人常規狀況為 9 人 3 勝）
             if len(qualified) == 8:
                 final_8_players = qualified.copy()
-                st.info("💡 剛好 8 人晉級，無需進行外卡附加賽，直通八強！")
-            else:
-                st.write("### ⚔️ 第一階段：外卡附加賽 (Play-In)")
-                st.markdown("""
-                * 🏆 **前 1~6 名 (保送八強)**：""" + "、".join([f"**{p}號 {player_map.get(p,'')}**" for p in top_6]) + """
-                * ⚔️ **第 7~10 名 (爭奪最後 2 張八強門票)**：
-                  * **外卡戰 1**：第 7 名 🆚 第 10 名
-                  * **外卡戰 2**：第 8 名 🆚 第 9 名
-                """)
+                st.info("💡 剛好 8 人 3 勝晉級，無需進行外卡賽，直通八強！")
+            elif len(qualified) >= 9:
+                top_7 = qualified[:7]
+                p8 = qualified[7]
+                p9 = qualified[8]
 
-                p7 = qualified[6] if len(qualified) >= 7 else None
-                p8 = qualified[7] if len(qualified) >= 8 else None
-                p9 = qualified[8] if len(qualified) >= 9 else None
-                p10 = qualified[9] if len(qualified) >= 10 else None
+                st.write("### ⚔️ 第一階段：18人外卡生死戰 (Play-In Match)")
+                st.markdown(
+                    "* 🏆 **前 1~7 名 (保送八強)**："
+                    + "、".join([
+                        f"**{p}號 {player_map.get(p,'')}**" for p in top_7
+                    ])
+                    + f"""
+                * ⚔️ **第 8 名 🆚 第 9 名 (爭奪最後 1 張八強門票)**：
+                  * **外卡生死戰**：{p8}號 {player_map.get(p8,'')} 🆚 {p9}號 {player_map.get(p9,'')}
+                """
+                )
 
                 if df_playin is None or df_playin.empty:
                     p_data = [
-                        {
-                            "場次": "外卡戰1",
-                            "選手A": p7,
-                            "選手B": p10,
-                            "勝者": 0,
-                        },
-                        {
-                            "場次": "外卡戰2",
-                            "選手A": p8,
-                            "選手B": p9,
-                            "勝者": 0,
-                        },
+                        {"場次": "外卡戰", "選手A": p8, "選手B": p9, "勝者": 0}
                     ]
                     df_playin = pd.DataFrame(p_data)
                     save_playin(df_playin)
 
-                col_pi1, col_pi2 = st.columns(2)
-                pi1_w = int(
-                    df_playin.loc[df_playin["場次"] == "外卡戰1", "勝者"].values[0]
-                )
-                pi2_w = int(
-                    df_playin.loc[df_playin["場次"] == "外卡戰2", "勝者"].values[0]
+                pi_w = int(
+                    df_playin.loc[df_playin["場次"] == "外卡戰", "勝者"].values[0]
                 )
 
-                with col_pi1:
-                    p7_str = f"{p7}號 {player_map.get(p7,'')}"
-                    p10_str = f"{p10}號 {player_map.get(p10,'')}"
-                    st.markdown(f"##### ⚔️ 外卡戰 1：**🔴 {p7_str}** 🆚 **🔵 {p10_str}**")
-                    if is_admin:
-                        opts_pi1 = [0, p7, p10]
-                        sel_pi1 = st.selectbox(
-                            "外卡戰 1 勝者：",
-                            opts_pi1,
-                            format_func=lambda x: "請選擇..."
-                            if x == 0
-                            else f"{x}號 {player_map.get(x,'')}",
-                            index=opts_pi1.index(pi1_w),
-                            key="sel_pi1",
-                        )
-                        if sel_pi1 != pi1_w:
-                            df_playin.loc[
-                                df_playin["場次"] == "外卡戰1", "勝者"
-                            ] = sel_pi1
-                            save_playin(df_playin)
-                            st.rerun()
-                    else:
-                        st.write(
-                            f"勝者："
-                            f" `{player_map.get(pi1_w, '比賽中') if pi1_w != 0 else '比賽中'}`"
-                        )
+                p8_str = f"{p8}號 {player_map.get(p8,'')}"
+                p9_str = f"{p9}號 {player_map.get(p9,'')}"
 
-                with col_pi2:
-                    p8_str = f"{p8}號 {player_map.get(p8,'')}"
-                    p9_str = f"{p9}號 {player_map.get(p9,'')}"
-                    st.markdown(f"##### ⚔️ 外卡戰 2：**🔴 {p8_str}** 🆚 **🔵 {p9_str}**")
-                    if is_admin:
-                        opts_pi2 = [0, p8, p9]
-                        sel_pi2 = st.selectbox(
-                            "外卡戰 2 勝者：",
-                            opts_pi2,
-                            format_func=lambda x: "請選擇..."
-                            if x == 0
-                            else f"{x}號 {player_map.get(x,'')}",
-                            index=opts_pi2.index(pi2_w),
-                            key="sel_pi2",
+                st.markdown(
+                    f"##### ⚔️ 外卡戰：**🔴 {p8_str}** 🆚 **🔵 {p9_str}**"
+                )
+                if is_admin:
+                    opts_pi = [0, p8, p9]
+                    sel_pi = st.selectbox(
+                        "選擇外卡戰勝者：",
+                        opts_pi,
+                        format_func=lambda x: "請選擇..."
+                        if x == 0
+                        else f"{x}號 {player_map.get(x,'')}",
+                        index=opts_pi.index(pi_w),
+                        key="sel_pi_18",
+                    )
+                    if sel_pi != pi_w:
+                        df_playin.loc[df_playin["場次"] == "外卡戰", "勝者"] = (
+                            sel_pi
                         )
-                        if sel_pi2 != pi2_w:
-                            df_playin.loc[
-                                df_playin["場次"] == "外卡戰2", "勝者"
-                            ] = sel_pi2
-                            save_playin(df_playin)
-                            st.rerun()
-                    else:
-                        st.write(
-                            f"勝者："
-                            f" `{player_map.get(pi2_w, '比賽中') if pi2_w != 0 else '比賽中'}`"
-                        )
+                        save_playin(df_playin)
+                        st.rerun()
+                else:
+                    st.write(
+                        f"勝者："
+                        f" `{player_map.get(pi_w, '比賽中') if pi_w != 0 else '比賽中'}`"
+                    )
 
-                if pi1_w != 0 and pi2_w != 0:
-                    final_8_players = top_6 + [pi1_w, pi2_w]
+                if pi_w != 0:
+                    final_8_players = top_7 + [pi_w]
                     f8_str = "、".join([
                         f"{p}號 {player_map.get(p,'')}" for p in final_8_players
                     ])
@@ -1967,7 +1925,7 @@ with main_tab1:
                 _,
             ) = calculate_swiss_cutoff_standings()
 
-            total_p = len(df_reg) if not df_reg.empty else 20
+            total_p = len(df_reg) if not df_reg.empty else 18
             p_ids = (
                 [int(p) for p in df_reg["編號"] if p != 0]
                 if not df_reg.empty and (df_reg["編號"] != 0).any()
@@ -1985,10 +1943,10 @@ with main_tab1:
                 st_str = "🟢 進行中"
                 if p_id in qualified:
                     if len(qualified) > 8:
-                        if rank_idx <= 6:
-                            st_str = "🏆 保送八強 (1~6名)"
-                        elif rank_idx <= 10:
-                            st_str = "⚔️ 外卡爭奪戰 (7~10名)"
+                        if rank_idx <= 7:
+                            st_str = "🏆 保送八強 (1~7名)"
+                        elif rank_idx <= 9:
+                            st_str = "⚔️ 外卡生死戰 (8~9名)"
                         else:
                             st_str = "🏆 3勝晉級區"
                     else:
