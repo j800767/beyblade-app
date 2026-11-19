@@ -206,6 +206,27 @@ player_map = (
 )
 
 
+def get_team_members(team_code: str) -> str:
+    """取得指定組別的隊員名稱字串，例如 '小明 & 小華'"""
+    if team_code not in TEAM_NAMES or df_team_p.empty:
+        return ""
+    row = df_team_p[df_team_p["組別"] == team_code]
+    if row.empty:
+        return ""
+    p1 = str(row["選手1"].values[0]).strip()
+    p2 = str(row["選手2"].values[0]).strip()
+    members = [p for p in [p1, p2] if p]
+    return " & ".join(members)
+
+
+def get_team_label(team_code: str) -> str:
+    """取得含隊員名稱的完整組別標籤，例如 'A組 (小明 & 小華)'"""
+    members_str = get_team_members(team_code)
+    if members_str:
+        return f"{team_code} ({members_str})"
+    return team_code
+
+
 # ==========================================
 # 3. 計算邏輯 (瑞士輪 + 抗快分 + 比分得失分 + 奇數輪空保底)
 # ==========================================
@@ -648,50 +669,43 @@ with main_tab2:
                 t1, t2 = r["隊伍A"], r["隊伍B"]
                 w_team = r["勝隊"]
 
-                p1_str = (
-                    f"({df_team_p.loc[df_team_p['組別']==t1, '選手1'].values[0]} & {df_team_p.loc[df_team_p['組別']==t1, '選手2'].values[0]})"
-                    if not df_team_p.empty
-                    else ""
-                )
-                p2_str = (
-                    f"({df_team_p.loc[df_team_p['組別']==t2, '選手1'].values[0]} & {df_team_p.loc[df_team_p['組別']==t2, '選手2'].values[0]})"
-                    if not df_team_p.empty
-                    else ""
-                )
+                t1_label = get_team_label(t1)
+                t2_label = get_team_label(t2)
+                w_label = get_team_label(w_team)
 
                 st.write(
-                    f"#### 🥊 場次 {m_num} 【{g_label}】：**🔴 {t1}** {p1_str} 🆚"
-                    f" **🔵 {t2}** {p2_str}"
+                    f"#### 🥊 場次 {m_num} 【{g_label}】：**🔴 {t1_label}** 🆚"
+                    f" **🔵 {t2_label}**"
                 )
 
                 if is_admin:
                     c1, c2, c3 = st.columns([3, 3, 2])
                     with c1:
                         if st.button(
-                            f"🏆 {t1} 獲勝",
+                            f"🏆 {t1_label} 獲勝",
                             key=f"tm_btn_a_{m_idx}",
                             use_container_width=True,
                             type="primary" if w_team == t1 else "secondary",
                         ):
                             df_team_m.at[m_idx, "勝隊"] = t1
                             save_team_matches(df_team_m)
-                            st.toast(f"場次 {m_num}：{t1} 勝出！")
+                            st.toast(f"場次 {m_num}：{t1_label} 勝出！")
                             st.rerun()
                     with c2:
                         if st.button(
-                            f"🏆 {t2} 獲勝",
+                            f"🏆 {t2_label} 獲勝",
                             key=f"tm_btn_b_{m_idx}",
                             use_container_width=True,
                             type="primary" if w_team == t2 else "secondary",
                         ):
                             df_team_m.at[m_idx, "勝隊"] = t2
                             save_team_matches(df_team_m)
-                            st.toast(f"場次 {m_num}：{t2} 勝出！")
+                            st.toast(f"場次 {m_num}：{t2_label} 勝出！")
                             st.rerun()
                     with c3:
-                        st.caption(f"目前勝隊：`{w_team}`")
+                        st.caption(f"目前勝隊：`{w_label}`")
                 else:
-                    st.write(f"比賽結果：`{w_team}`")
+                    st.write(f"比賽結果：`{w_label}`")
                 st.write("---")
 
     with t_tab3:
@@ -737,22 +751,28 @@ with main_tab2:
                     tied_teams_a = [
                         t for t in pinnacle_teams if w_a[t] == w_a[ranked_a[1]]
                     ]
+                    tied_labels_a = [get_team_label(t) for t in tied_teams_a]
                     st.warning(
                         f"⚠️ **偵測到戰績平手 ({w_a[ranked_a[1]]}勝)！**\n平手隊伍："
-                        f" {', '.join(tied_teams_a)}"
+                        f" {', '.join(tied_labels_a)}"
                     )
                     if is_admin:
                         a2 = st.selectbox(
                             "請選擇【巔峰組加賽獲勝隊伍】（第二名晉級）：",
                             tied_teams_a,
+                            format_func=get_team_label,
                             key="tie_override_a",
                         )
                     else:
                         a2 = ranked_a[1]
-                        st.info(f"當前第二名：{a2} (請管理員進行加賽確認)")
+                        st.info(
+                            f"當前第二名：{get_team_label(a2)} (請管理員進行加賽確認)"
+                        )
                 else:
                     a2 = ranked_a[1]
-                    st.success(f"第一名：**{a1}** | 第二名：**{a2}**")
+                    st.success(
+                        f"第一名：**{get_team_label(a1)}** | 第二名：**{get_team_label(a2)}**"
+                    )
 
             with col_tie_b:
                 st.markdown("#### 🔵 涅槃組晉級隊伍")
@@ -761,22 +781,28 @@ with main_tab2:
                     tied_teams_b = [
                         t for t in nirvana_teams if w_b[t] == w_b[ranked_b[1]]
                     ]
+                    tied_labels_b = [get_team_label(t) for t in tied_teams_b]
                     st.warning(
                         f"⚠️ **偵測到戰績平手 ({w_b[ranked_b[1]]}勝)！**\n平手隊伍："
-                        f" {', '.join(tied_teams_b)}"
+                        f" {', '.join(tied_labels_b)}"
                     )
                     if is_admin:
                         b2 = st.selectbox(
                             "請選擇【涅槃組加賽獲勝隊伍】（第二名晉級）：",
                             tied_teams_b,
+                            format_func=get_team_label,
                             key="tie_override_b",
                         )
                     else:
                         b2 = ranked_b[1]
-                        st.info(f"當前第二名：{b2} (請管理員進行加賽確認)")
+                        st.info(
+                            f"當前第二名：{get_team_label(b2)} (請管理員進行加賽確認)"
+                        )
                 else:
                     b2 = ranked_b[1]
-                    st.success(f"第一名：**{b1}** | 第二名：**{b2}**")
+                    st.success(
+                        f"第一名：**{get_team_label(b1)}** | 第二名：**{get_team_label(b2)}**"
+                    )
 
             st.write("---")
 
@@ -839,7 +865,8 @@ with main_tab2:
 
             with col_tf1:
                 st.markdown(
-                    f"##### ⚔️ 準決賽 1：**🔴 {a1} (巔峰1)** 🆚 **🔵 {b2} (涅槃2)**"
+                    f"##### ⚔️ 準決賽 1：**🔴 {get_team_label(a1)} (巔峰1)** 🆚"
+                    f" **🔵 {get_team_label(b2)} (涅槃2)**"
                 )
                 if is_admin:
                     opts_tf1 = ["請選擇勝隊...", a1, b2]
@@ -847,6 +874,9 @@ with main_tab2:
                     sel_tf1 = st.selectbox(
                         "選擇準決賽 1 勝隊：",
                         opts_tf1,
+                        format_func=lambda x: x
+                        if x == "請選擇勝隊..."
+                        else get_team_label(x),
                         index=opts_tf1.index(curr_tf1),
                         key="tf1_sel",
                     )
@@ -884,11 +914,14 @@ with main_tab2:
                         save_team_finals(df_team_f)
                         st.rerun()
                 else:
-                    st.write(f"勝隊：`{sf1_w if sf1_w else '比賽中'}`")
+                    st.write(
+                        f"勝隊：`{get_team_label(sf1_w) if sf1_w else '比賽中'}`"
+                    )
 
             with col_tf2:
                 st.markdown(
-                    f"##### ⚔️ 準決賽 2：**🔴 {b1} (涅槃1)** 🆚 **🔵 {a2} (巔峰2)**"
+                    f"##### ⚔️ 準決賽 2：**🔴 {get_team_label(b1)} (涅槃1)** 🆚"
+                    f" **🔵 {get_team_label(a2)} (巔峰2)**"
                 )
                 if is_admin:
                     opts_tf2 = ["請選擇勝隊...", b1, a2]
@@ -896,6 +929,9 @@ with main_tab2:
                     sel_tf2 = st.selectbox(
                         "選擇準決賽 2 勝隊：",
                         opts_tf2,
+                        format_func=lambda x: x
+                        if x == "請選擇勝隊..."
+                        else get_team_label(x),
                         index=opts_tf2.index(curr_tf2),
                         key="tf2_sel",
                     )
@@ -933,7 +969,9 @@ with main_tab2:
                         save_team_finals(df_team_f)
                         st.rerun()
                 else:
-                    st.write(f"勝隊：`{sf2_w if sf2_w else '比賽中'}`")
+                    st.write(
+                        f"勝隊：`{get_team_label(sf2_w) if sf2_w else '比賽中'}`"
+                    )
 
             st.write("---")
             st.subheader("🥇 2. 總決賽 (Finals)")
@@ -962,13 +1000,19 @@ with main_tab2:
             with col_t3rd:
                 st.markdown("##### 🥉 季軍賽 (3rd Place)")
                 if tp3_1 != "待定" and tp3_2 != "待定":
-                    st.write(f"🔴 **{tp3_1}** VS 🔵 **{tp3_2}**")
+                    st.write(
+                        f"🔴 **{get_team_label(tp3_1)}** VS 🔵"
+                        f" **{get_team_label(tp3_2)}**"
+                    )
                     if is_admin:
                         opts_t3 = ["請選擇勝隊...", tp3_1, tp3_2]
                         curr_t3 = tp3_w if tp3_w in opts_t3 else "請選擇勝隊..."
                         sel_t3 = st.selectbox(
                             "選擇季軍隊伍：",
                             opts_t3,
+                            format_func=lambda x: x
+                            if x == "請選擇勝隊..."
+                            else get_team_label(x),
                             index=opts_t3.index(curr_t3),
                             key="t3_sel",
                         )
@@ -983,18 +1027,26 @@ with main_tab2:
                             save_team_finals(df_team_f)
                             st.rerun()
                     else:
-                        st.write(f"勝隊：`{tp3_w if tp3_w else '比賽中'}`")
+                        st.write(
+                            f"勝隊：`{get_team_label(tp3_w) if tp3_w else '比賽中'}`"
+                        )
 
             with col_t1st:
                 st.markdown("##### 👑 冠軍賽 (Championship)")
                 if tp1_1 != "待定" and tp1_2 != "待定":
-                    st.write(f"🔴 **{tp1_1}** VS 🔵 **{tp1_2}**")
+                    st.write(
+                        f"🔴 **{get_team_label(tp1_1)}** VS 🔵"
+                        f" **{get_team_label(tp1_2)}**"
+                    )
                     if is_admin:
                         opts_t1 = ["請選擇勝隊...", tp1_1, tp1_2]
                         curr_t1 = tp1_w if tp1_w in opts_t1 else "請選擇勝隊..."
                         sel_t1 = st.selectbox(
                             "選擇總冠軍隊伍：",
                             opts_t1,
+                            format_func=lambda x: x
+                            if x == "請選擇勝隊..."
+                            else get_team_label(x),
                             index=opts_t1.index(curr_t1),
                             key="t1_sel",
                         )
@@ -1009,7 +1061,9 @@ with main_tab2:
                             save_team_finals(df_team_f)
                             st.rerun()
                     else:
-                        st.write(f"勝隊：`{tp1_w if tp1_w else '比賽中'}`")
+                        st.write(
+                            f"勝隊：`{get_team_label(tp1_w) if tp1_w else '比賽中'}`"
+                        )
 
             if tp1_w and tp3_w and tp1_w != "" and tp3_w != "":
                 st.write("---")
@@ -1029,10 +1083,10 @@ with main_tab2:
 
                 st.success(f"""
                 ### 🎉 團體賽最終榮譽榜：
-                * 🥇 **總冠軍**：{t_champ}
-                * 🥈 **亞軍**：{t_runner}
-                * 🥉 **季軍**：{t_third}
-                * 🏅 **殿軍**：{t_fourth}
+                * 🥇 **總冠軍**：{get_team_label(t_champ)}
+                * 🥈 **亞軍**：{get_team_label(t_runner)}
+                * 🥉 **季軍**：{get_team_label(t_third)}
+                * 🏅 **殿軍**：{get_team_label(t_fourth)}
                 """)
 
     with t_tab4:
@@ -1058,6 +1112,7 @@ with main_tab2:
                         {
                             "排名": f"第 {i} 名",
                             "隊伍": t,
+                            "隊員名單": get_team_members(t) or "未登記",
                             "勝": w_a[t],
                             "敗": l_a[t],
                         }
@@ -1071,6 +1126,7 @@ with main_tab2:
                         {
                             "排名": f"第 {i} 名",
                             "隊伍": t,
+                            "隊員名單": get_team_members(t) or "未登記",
                             "勝": w_b[t],
                             "敗": l_b[t],
                         }
