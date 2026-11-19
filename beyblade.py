@@ -483,6 +483,84 @@ def calculate_group_standings(
     return t_wins, t_losses, ranked_teams
 
 
+def resolve_group_qualifiers_ui(
+    group_title: str,
+    group_teams: List[str],
+    w_map: Dict[str, int],
+    ranked: List[str],
+    is_admin: bool,
+    key_prefix: str,
+) -> Tuple[str, str]:
+    """處理 4 隊單循環的晉級與平手加賽判定，確保第一名與第二名絕不重複"""
+    st.markdown(f"#### {group_title}")
+
+    # 情況 1：前三名戰績相同（例如三隊 2勝1敗 互咬），需同時決定第 1 名與第 2 名
+    if w_map[ranked[0]] == w_map[ranked[1]] == w_map[ranked[2]]:
+        tied_top3 = [t for t in group_teams if w_map[t] == w_map[ranked[0]]]
+        tied_labels = [get_team_label(t) for t in tied_top3]
+        st.warning(
+            f"⚠️ **偵測到三隊戰績平手 ({w_map[ranked[0]]}勝)！**\n平手隊伍："
+            f" {', '.join(tied_labels)}"
+        )
+        if is_admin:
+            first_place = st.selectbox(
+                "1️⃣ 請選擇【加賽第一名】（小組第 1 晉級）：",
+                tied_top3,
+                index=0,
+                format_func=get_team_label,
+                key=f"{key_prefix}_1st",
+            )
+            remaining_for_2nd = [t for t in tied_top3 if t != first_place]
+            second_place = st.selectbox(
+                "2️⃣ 請選擇【加賽第二名】（小組第 2 晉級）：",
+                remaining_for_2nd,
+                index=0,
+                format_func=get_team_label,
+                key=f"{key_prefix}_2nd",
+            )
+            return first_place, second_place
+        else:
+            st.info(
+                f"暫定第一名：{get_team_label(ranked[0])} ｜ 第二名："
+                f" {get_team_label(ranked[1])} (待管理員確認加賽)"
+            )
+            return ranked[0], ranked[1]
+
+    # 情況 2：第一名已確定（3勝0敗），第二、三名（甚至第四名）戰績相同（1勝2敗），加賽搶第 2 名
+    elif w_map[ranked[1]] == w_map[ranked[2]]:
+        first_place = ranked[0]
+        tied_2nd = [t for t in group_teams if w_map[t] == w_map[ranked[1]]]
+        tied_labels = [get_team_label(t) for t in tied_2nd]
+        st.warning(
+            f"✅ 第一名確定：**{get_team_label(first_place)}**\n\n"
+            f"⚠️ **第二名戰績平手 ({w_map[ranked[1]]}勝)！** 平手隊伍："
+            f" {', '.join(tied_labels)}"
+        )
+        if is_admin:
+            second_place = st.selectbox(
+                "請選擇【加賽獲勝隊伍】（小組第 2 晉級）：",
+                tied_2nd,
+                index=0,
+                format_func=get_team_label,
+                key=f"{key_prefix}_tie2nd",
+            )
+            return first_place, second_place
+        else:
+            st.info(
+                f"暫定第二名：{get_team_label(ranked[1])} (待管理員確認加賽)"
+            )
+            return first_place, ranked[1]
+
+    # 情況 3：無平手，直接取前兩名
+    else:
+        first_place, second_place = ranked[0], ranked[1]
+        st.success(
+            f"第一名：**{get_team_label(first_place)}** | 第二名："
+            f"**{get_team_label(second_place)}**"
+        )
+        return first_place, second_place
+
+
 # ==========================================
 # 4. 側邊欄與權限控制
 # ==========================================
@@ -738,71 +816,28 @@ with main_tab2:
             w_a, l_a, ranked_a = calculate_group_standings(pinnacle_teams)
             w_b, l_b, ranked_b = calculate_group_standings(nirvana_teams)
 
-            pinnacle_tie = w_a[ranked_a[1]] == w_a[ranked_a[2]]
-            nirvana_tie = w_b[ranked_b[1]] == w_b[ranked_b[2]]
-
             st.write("### 🥊 小組晉級狀態與加賽判定")
             col_tie_a, col_tie_b = st.columns(2)
 
             with col_tie_a:
-                st.markdown("#### 🔴 巔峰組晉級隊伍")
-                a1 = ranked_a[0]
-                if pinnacle_tie:
-                    tied_teams_a = [
-                        t for t in pinnacle_teams if w_a[t] == w_a[ranked_a[1]]
-                    ]
-                    tied_labels_a = [get_team_label(t) for t in tied_teams_a]
-                    st.warning(
-                        f"⚠️ **偵測到戰績平手 ({w_a[ranked_a[1]]}勝)！**\n平手隊伍："
-                        f" {', '.join(tied_labels_a)}"
-                    )
-                    if is_admin:
-                        a2 = st.selectbox(
-                            "請選擇【巔峰組加賽獲勝隊伍】（第二名晉級）：",
-                            tied_teams_a,
-                            format_func=get_team_label,
-                            key="tie_override_a",
-                        )
-                    else:
-                        a2 = ranked_a[1]
-                        st.info(
-                            f"當前第二名：{get_team_label(a2)} (請管理員進行加賽確認)"
-                        )
-                else:
-                    a2 = ranked_a[1]
-                    st.success(
-                        f"第一名：**{get_team_label(a1)}** | 第二名：**{get_team_label(a2)}**"
-                    )
+                a1, a2 = resolve_group_qualifiers_ui(
+                    "🔴 巔峰組晉級隊伍",
+                    pinnacle_teams,
+                    w_a,
+                    ranked_a,
+                    is_admin,
+                    "pinnacle",
+                )
 
             with col_tie_b:
-                st.markdown("#### 🔵 涅槃組晉級隊伍")
-                b1 = ranked_b[0]
-                if nirvana_tie:
-                    tied_teams_b = [
-                        t for t in nirvana_teams if w_b[t] == w_b[ranked_b[1]]
-                    ]
-                    tied_labels_b = [get_team_label(t) for t in tied_teams_b]
-                    st.warning(
-                        f"⚠️ **偵測到戰績平手 ({w_b[ranked_b[1]]}勝)！**\n平手隊伍："
-                        f" {', '.join(tied_labels_b)}"
-                    )
-                    if is_admin:
-                        b2 = st.selectbox(
-                            "請選擇【涅槃組加賽獲勝隊伍】（第二名晉級）：",
-                            tied_teams_b,
-                            format_func=get_team_label,
-                            key="tie_override_b",
-                        )
-                    else:
-                        b2 = ranked_b[1]
-                        st.info(
-                            f"當前第二名：{get_team_label(b2)} (請管理員進行加賽確認)"
-                        )
-                else:
-                    b2 = ranked_b[1]
-                    st.success(
-                        f"第一名：**{get_team_label(b1)}** | 第二名：**{get_team_label(b2)}**"
-                    )
+                b1, b2 = resolve_group_qualifiers_ui(
+                    "🔵 涅槃組晉級隊伍",
+                    nirvana_teams,
+                    w_b,
+                    ranked_b,
+                    is_admin,
+                    "nirvana",
+                )
 
             st.write("---")
 
@@ -840,17 +875,49 @@ with main_tab2:
                 df_team_f = pd.DataFrame(finals_data)
                 save_team_finals(df_team_f)
             else:
+                old_a1 = df_team_f.loc[
+                    df_team_f["階段"] == "準決賽1", "隊伍1"
+                ].values[0]
                 old_b2 = df_team_f.loc[
                     df_team_f["階段"] == "準決賽1", "隊伍2"
+                ].values[0]
+                old_b1 = df_team_f.loc[
+                    df_team_f["階段"] == "準決賽2", "隊伍1"
                 ].values[0]
                 old_a2 = df_team_f.loc[
                     df_team_f["階段"] == "準決賽2", "隊伍2"
                 ].values[0]
-                df_team_f.loc[df_team_f["階段"] == "準決賽1", "隊伍1"] = a1
-                df_team_f.loc[df_team_f["階段"] == "準決賽1", "隊伍2"] = b2
-                df_team_f.loc[df_team_f["階段"] == "準決賽2", "隊伍1"] = b1
-                df_team_f.loc[df_team_f["階段"] == "準決賽2", "隊伍2"] = a2
-                if old_b2 != b2 or old_a2 != a2:
+                if (old_a1, old_b2, old_b1, old_a2) != (a1, b2, b1, a2):
+                    df_team_f = pd.DataFrame([
+                        {
+                            "階段": "準決賽1",
+                            "隊伍1": a1,
+                            "隊伍2": b2,
+                            "勝隊": "",
+                            "敗隊": "",
+                        },
+                        {
+                            "階段": "準決賽2",
+                            "隊伍1": b1,
+                            "隊伍2": a2,
+                            "勝隊": "",
+                            "敗隊": "",
+                        },
+                        {
+                            "階段": "季軍賽",
+                            "隊伍1": "待定",
+                            "隊伍2": "待定",
+                            "勝隊": "",
+                            "敗隊": "",
+                        },
+                        {
+                            "階段": "冠軍賽",
+                            "隊伍1": "待定",
+                            "隊伍2": "待定",
+                            "勝隊": "",
+                            "敗隊": "",
+                        },
+                    ])
                     save_team_finals(df_team_f)
 
             sf1_w = df_team_f.loc[df_team_f["階段"] == "準決賽1", "勝隊"].values[
