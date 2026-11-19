@@ -27,14 +27,24 @@ TEAM_NAMES = ["A組", "B組", "C組", "D組", "E組", "F組", "G組", "H組"]
 
 
 # ==========================================
-# 2. 資料存取與快取機制
+# 2. 資料存取與快取機制 (全面強制 dtype=str 防呆)
 # ==========================================
 @st.cache_data
 def load_registrations() -> pd.DataFrame:
     if os.path.exists(REG_FILE):
-        df = pd.read_csv(REG_FILE).fillna("")
+        df = pd.read_csv(REG_FILE, dtype=str).fillna("")
         if "編號" not in df.columns:
             df["編號"] = 0
+        else:
+            df["編號"] = (
+                pd.to_numeric(df["編號"], errors="coerce")
+                .fillna(0)
+                .astype(int)
+            )
+        if "選手名稱" not in df.columns:
+            df["選手名稱"] = ""
+        else:
+            df["選手名稱"] = df["選手名稱"].astype(str)
         return df
     return pd.DataFrame(columns=["編號", "選手名稱"])
 
@@ -47,11 +57,26 @@ def save_registrations(df: pd.DataFrame) -> None:
 @st.cache_data
 def load_swiss_matches() -> Optional[pd.DataFrame]:
     if os.path.exists(SWISS_MATCH_FILE):
-        df = pd.read_csv(SWISS_MATCH_FILE).fillna(0)
-        if "選手A_得分" not in df.columns:
-            df["選手A_得分"] = 0
-        if "選手B_得分" not in df.columns:
-            df["選手B_得分"] = 0
+        df = pd.read_csv(SWISS_MATCH_FILE, dtype=str).fillna("")
+        int_cols = [
+            "輪次",
+            "選手A_編號",
+            "選手B_編號",
+            "勝者_編號",
+            "選手A_得分",
+            "選手B_得分",
+        ]
+        for col in int_cols:
+            if col in df.columns:
+                df[col] = (
+                    pd.to_numeric(df[col], errors="coerce")
+                    .fillna(0)
+                    .astype(int)
+                )
+            else:
+                df[col] = 0
+        if "組別標籤" in df.columns:
+            df["組別標籤"] = df["組別標籤"].astype(str)
         return df
     return None
 
@@ -67,7 +92,17 @@ def save_swiss_matches(df: Optional[pd.DataFrame]) -> None:
 @st.cache_data
 def load_playin() -> Optional[pd.DataFrame]:
     if os.path.exists(PLAYIN_FILE):
-        return pd.read_csv(PLAYIN_FILE).fillna(0)
+        df = pd.read_csv(PLAYIN_FILE, dtype=str).fillna("")
+        for col in ["選手A", "選手B", "勝者"]:
+            if col in df.columns:
+                df[col] = (
+                    pd.to_numeric(df[col], errors="coerce")
+                    .fillna(0)
+                    .astype(int)
+                )
+        if "場次" in df.columns:
+            df["場次"] = df["場次"].astype(str)
+        return df
     return None
 
 
@@ -82,7 +117,7 @@ def save_playin(df: Optional[pd.DataFrame]) -> None:
 @st.cache_data
 def load_finals() -> Optional[pd.DataFrame]:
     if os.path.exists(FINALS_FILE):
-        df = pd.read_csv(FINALS_FILE).fillna("")
+        df = pd.read_csv(FINALS_FILE, dtype=str).fillna("")
         for col in ["階段", "選手1", "選手2", "勝者", "敗者"]:
             if col in df.columns:
                 df[col] = df[col].astype(str)
@@ -101,7 +136,11 @@ def save_finals(df: Optional[pd.DataFrame]) -> None:
 @st.cache_data
 def load_team_players() -> pd.DataFrame:
     if os.path.exists(TEAM_DATA_FILE):
-        return pd.read_csv(TEAM_DATA_FILE).fillna("")
+        df = pd.read_csv(TEAM_DATA_FILE, dtype=str).fillna("")
+        for col in ["組別", "選手1", "選手2", "分組"]:
+            if col in df.columns:
+                df[col] = df[col].astype(str)
+        return df
     return pd.DataFrame(columns=["組別", "選手1", "選手2", "分組"])
 
 
@@ -113,7 +152,17 @@ def save_team_players(df: pd.DataFrame) -> None:
 @st.cache_data
 def load_team_matches() -> Optional[pd.DataFrame]:
     if os.path.exists(TEAM_MATCH_FILE):
-        return pd.read_csv(TEAM_MATCH_FILE).fillna("")
+        df = pd.read_csv(TEAM_MATCH_FILE, dtype=str).fillna("")
+        if "場次" in df.columns:
+            df["場次"] = (
+                pd.to_numeric(df["場次"], errors="coerce")
+                .fillna(0)
+                .astype(int)
+            )
+        for col in ["分組", "隊伍A", "隊伍B", "勝隊"]:
+            if col in df.columns:
+                df[col] = df[col].astype(str)
+        return df
     return None
 
 
@@ -128,7 +177,7 @@ def save_team_matches(df: Optional[pd.DataFrame]) -> None:
 @st.cache_data
 def load_team_finals() -> Optional[pd.DataFrame]:
     if os.path.exists(TEAM_FINALS_FILE):
-        df = pd.read_csv(TEAM_FINALS_FILE).fillna("")
+        df = pd.read_csv(TEAM_FINALS_FILE, dtype=str).fillna("")
         for col in ["階段", "隊伍1", "隊伍2", "勝隊", "敗隊"]:
             if col in df.columns:
                 df[col] = df[col].astype(str)
@@ -307,7 +356,6 @@ def generate_cutoff_next_round_pairs(current_round: int) -> List[Dict]:
 
     # 保底機制：若第3輪結束出現 2人3勝 + 3人3敗，第4輪存活會是 13 人(奇數)
     if len(candidates) % 2 == 1:
-        # 優先挑戰績最靠後且尚未輪空過的選手輪空
         no_bye_candidates = [p for p in candidates if bye_counts[p] == 0]
         if no_bye_candidates:
             bye_player = no_bye_candidates[-1]
@@ -415,7 +463,7 @@ def calculate_group_standings(
 
 
 # ==========================================
-# 4. 側邊欄與權限控制 (修正密碼驗證漏洞)
+# 4. 側邊欄與權限控制
 # ==========================================
 st.sidebar.header("🔑 管理者驗證專區")
 is_admin_check = st.sidebar.checkbox("開啟管理員控制權限", value=False)
@@ -1285,7 +1333,6 @@ with main_tab1:
                 s2_curr = int(row.get("選手B_得分", 0))
                 p1_str = f"{p1_id}號 {player_map.get(p1_id, '')}"
 
-                # 處理奇數存活的輪空場次
                 if p2_id == 0:
                     st.write(
                         f"#### 🎉 【{row['組別標籤']}】 **🟢 {p1_str}** 本輪輪空（自動獲得 1 勝，比分記 `4 : 2`）"
@@ -1579,7 +1626,7 @@ with main_tab1:
                     hide_index=True,
                 )
 
-    # --- Tab 4: 決賽 & 18人外卡賽 (修正改分後名次變動閃退 Bug) ---
+    # --- Tab 4: 決賽 & 18人外卡賽 ---
     with tab4:
         st.header("🏆 決賽 & 18人外卡附加賽 (Play-In Match)")
         (
@@ -1625,7 +1672,6 @@ with main_tab1:
                 """
                 )
 
-                # 若第8、9名因改分而變動，自動同步更新外卡對戰表並避免 ValueError
                 if (
                     df_playin is None
                     or df_playin.empty
