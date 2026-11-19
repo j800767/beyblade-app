@@ -22,7 +22,7 @@ TEAM_DATA_FILE = "team_players_registration.csv"  # 團體賽名單檔案 (8組)
 TEAM_MATCH_FILE = "team_matches.csv"  # 團體賽小組賽賽程檔案
 TEAM_FINALS_FILE = "team_finals_matches.csv"  # 團體賽四強決賽檔案
 
-ADMIN_PASSWORD = "admin"  # 管理員預設密碼
+ADMIN_PASSWORD = "admin"  # 管理員密碼
 TEAM_NAMES = ["A組", "B組", "C組", "D組", "E組", "F組", "G組", "H組"]
 
 
@@ -67,7 +67,7 @@ def save_swiss_matches(df: Optional[pd.DataFrame]) -> None:
 @st.cache_data
 def load_playin() -> Optional[pd.DataFrame]:
     if os.path.exists(PLAYIN_FILE):
-        return pd.read_csv(PLAYIN_FILE).fillna("")
+        return pd.read_csv(PLAYIN_FILE).fillna(0)
     return None
 
 
@@ -158,7 +158,7 @@ player_map = (
 
 
 # ==========================================
-# 3. 計算邏輯 (瑞士輪 + 抗快分 + 比分得失分)
+# 3. 計算邏輯 (瑞士輪 + 抗快分 + 比分得失分 + 奇數輪空保底)
 # ==========================================
 def calculate_swiss_cutoff_standings() -> Tuple[
     Dict[int, int],  # wins
@@ -171,6 +171,7 @@ def calculate_swiss_cutoff_standings() -> Tuple[
     List[int],  # eliminated
     List[int],  # active
     Set[Tuple[int, int]],  # played_pairs
+    Dict[int, int],  # bye_counts
 ]:
     total_p = len(df_reg) if not df_reg.empty else 18
     player_ids = (
@@ -184,6 +185,7 @@ def calculate_swiss_cutoff_standings() -> Tuple[
     opponents = {p_id: set() for p_id in player_ids}
     scores_for = {p_id: 0 for p_id in player_ids}
     scores_against = {p_id: 0 for p_id in player_ids}
+    bye_counts = {p_id: 0 for p_id in player_ids}
     played_pairs = set()
 
     if df_swiss is not None and not df_swiss.empty:
@@ -191,9 +193,18 @@ def calculate_swiss_cutoff_standings() -> Tuple[
             w = int(r["勝者_編號"]) if r["勝者_編號"] not in ["", 0] else 0
             p1 = int(r["選手A_編號"]) if r["選手A_編號"] not in ["", 0] else 0
             p2 = int(r["選手B_編號"]) if r["選手B_編號"] not in ["", 0] else 0
-            s1 = int(r["選手A_得分"]) if "選手A_得分" in r and r["選手A_得分"] != "" else 0
-            s2 = int(r["選手B_得分"]) if "選手B_得分" in r and r["選手B_得分"] != "" else 0
+            s1 = (
+                int(r["選手A_得分"])
+                if "選手A_得分" in r and r["選手A_得分"] != ""
+                else 0
+            )
+            s2 = (
+                int(r["選手B_得分"])
+                if "選手B_得分" in r and r["選手B_得分"] != ""
+                else 0
+            )
 
+            # 正常對戰
             if p1 != 0 and p2 != 0:
                 played_pairs.add(tuple(sorted([p1, p2])))
                 if p1 in opponents:
@@ -208,18 +219,31 @@ def calculate_swiss_cutoff_standings() -> Tuple[
                     scores_for[p2] += s2
                     scores_against[p2] += s1
 
-            if w != 0:
-                l = p2 if w == p1 else p1
-                if w in wins:
-                    wins[w] += 1
-                if l in losses:
-                    losses[l] += 1
+                if w != 0:
+                    l = p2 if w == p1 else p1
+                    if w in wins:
+                        wins[w] += 1
+                    if l in losses:
+                        losses[l] += 1
 
-    # 抗快分 (Buchholz): 所有對手總勝數加總
+            # 奇數存活時的輪空保底 (p2 == 0)
+            elif p1 != 0 and p2 == 0:
+                if p1 in bye_counts:
+                    bye_counts[p1] += 1
+                if p1 in scores_for:
+                    scores_for[p1] += s1
+                    scores_against[p1] += s2
+                if w == p1 and p1 in wins:
+                    wins[p1] += 1
+
+    # 抗快分 (Buchholz): 所有對手總勝數加總 (若有輪空則該輪補平均 2 分)
     buchholz = {}
     point_diff = {}
     for p_id in player_ids:
-        buchholz[p_id] = sum(wins.get(opp, 0) for opp in opponents[p_id])
+        buchholz[p_id] = (
+            sum(wins.get(opp, 0) for opp in opponents[p_id])
+            + bye_counts[p_id] * 2
+        )
         point_diff[p_id] = scores_for[p_id] - scores_against[p_id]
 
     qualified = []
@@ -258,6 +282,7 @@ def calculate_swiss_cutoff_standings() -> Tuple[
         eliminated,
         active,
         played_pairs,
+        bye_counts,
     )
 
 
@@ -273,31 +298,46 @@ def generate_cutoff_next_round_pairs(current_round: int) -> List[Dict]:
         eliminated,
         active,
         played_pairs,
+        bye_counts,
     ) = calculate_swiss_cutoff_standings()
 
+    match_data = []
+    candidates = active.copy()
+    bye_player = None
+
+    # 保底機制：若第3輪結束出現 2人3勝 + 3人3敗，第4輪存活會是 13 人(奇數)
+    if len(candidates) % 2 == 1:
+        # 優先挑戰績最靠後且尚未輪空過的選手輪空
+        no_bye_candidates = [p for p in candidates if bye_counts[p] == 0]
+        if no_bye_candidates:
+            bye_player = no_bye_candidates[-1]
+        else:
+            bye_player = candidates[-1]
+        candidates.remove(bye_player)
+
     def backtrack(
-        candidates: List[int],
+        rem_candidates: List[int],
     ) -> Optional[List[Tuple[int, int]]]:
-        if not candidates:
+        if not rem_candidates:
             return []
 
-        p1 = candidates[0]
-        for idx in range(1, len(candidates)):
-            p2 = candidates[idx]
+        p1 = rem_candidates[0]
+        for idx in range(1, len(rem_candidates)):
+            p2 = rem_candidates[idx]
             pair = tuple(sorted([p1, p2]))
             if pair not in played_pairs:
-                remaining = candidates[1:idx] + candidates[idx + 1 :]
+                remaining = rem_candidates[1:idx] + rem_candidates[idx + 1 :]
                 res = backtrack(remaining)
                 if res is not None:
                     return [(p1, p2)] + res
 
         return None
 
-    new_pairs = backtrack(active)
+    new_pairs = backtrack(candidates)
 
     if new_pairs is None:
         new_pairs = []
-        temp_candidates = active.copy()
+        temp_candidates = candidates.copy()
         while len(temp_candidates) >= 2:
             p1 = temp_candidates.pop(0)
             match_found = False
@@ -310,7 +350,6 @@ def generate_cutoff_next_round_pairs(current_round: int) -> List[Dict]:
             if not match_found:
                 new_pairs.append((p1, temp_candidates.pop(0)))
 
-    match_data = []
     for p1, p2 in new_pairs:
         p1_record = f"{wins[p1]}-{losses[p1]}"
         p2_record = f"{wins[p2]}-{losses[p2]}"
@@ -327,6 +366,18 @@ def generate_cutoff_next_round_pairs(current_round: int) -> List[Dict]:
             "勝者_編號": 0,
             "選手A_得分": 0,
             "選手B_得分": 0,
+        })
+
+    if bye_player is not None:
+        p_rec = f"{wins[bye_player]}-{losses[bye_player]}"
+        match_data.append({
+            "輪次": current_round,
+            "組別標籤": f"輪空晉級區 (原 {p_rec})",
+            "選手A_編號": bye_player,
+            "選手B_編號": 0,
+            "勝者_編號": bye_player,
+            "選手A_得分": 4,
+            "選手B_得分": 2,
         })
 
     return match_data
@@ -364,29 +415,23 @@ def calculate_group_standings(
 
 
 # ==========================================
-# 4. 側邊欄與權限控制
+# 4. 側邊欄與權限控制 (修正密碼驗證漏洞)
 # ==========================================
-if "is_admin" not in st.session_state:
-    st.session_state["is_admin"] = False
-
 st.sidebar.header("🔑 管理者驗證專區")
-is_admin_check = st.sidebar.checkbox(
-    "開啟管理員控制權限", value=st.session_state["is_admin"]
-)
+is_admin_check = st.sidebar.checkbox("開啟管理員控制權限", value=False)
+is_admin = False
 
-if is_admin_check != st.session_state["is_admin"]:
-    st.session_state["is_admin"] = is_admin_check
-
-if st.session_state["is_admin"]:
+if is_admin_check:
     admin_input = st.sidebar.text_input(
         "輸入管理密碼", type="password", key="pwd_input"
     )
     if admin_input == ADMIN_PASSWORD:
+        is_admin = True
         st.sidebar.success("🔓 管理員已授權")
+    elif admin_input != "":
+        st.sidebar.error("❌ 密碼錯誤")
     else:
-        st.sidebar.info("💡 預設密碼為: admin")
-
-is_admin = st.session_state["is_admin"]
+        st.sidebar.caption("請輸入密碼以解鎖後台操作")
 
 
 # ==========================================
@@ -721,10 +766,18 @@ with main_tab2:
                 df_team_f = pd.DataFrame(finals_data)
                 save_team_finals(df_team_f)
             else:
+                old_b2 = df_team_f.loc[
+                    df_team_f["階段"] == "準決賽1", "隊伍2"
+                ].values[0]
+                old_a2 = df_team_f.loc[
+                    df_team_f["階段"] == "準決賽2", "隊伍2"
+                ].values[0]
                 df_team_f.loc[df_team_f["階段"] == "準決賽1", "隊伍1"] = a1
                 df_team_f.loc[df_team_f["階段"] == "準決賽1", "隊伍2"] = b2
                 df_team_f.loc[df_team_f["階段"] == "準決賽2", "隊伍1"] = b1
                 df_team_f.loc[df_team_f["階段"] == "準決賽2", "隊伍2"] = a2
+                if old_b2 != b2 or old_a2 != a2:
+                    save_team_finals(df_team_f)
 
             sf1_w = df_team_f.loc[df_team_f["階段"] == "準決賽1", "勝隊"].values[
                 0
@@ -1190,6 +1243,7 @@ with main_tab1:
                 eliminated,
                 active,
                 _,
+                _,
             ) = calculate_swiss_cutoff_standings()
 
             current_max_round = int(df_swiss["輪次"].max())
@@ -1229,8 +1283,16 @@ with main_tab1:
                 )
                 s1_curr = int(row.get("選手A_得分", 0))
                 s2_curr = int(row.get("選手B_得分", 0))
-
                 p1_str = f"{p1_id}號 {player_map.get(p1_id, '')}"
+
+                # 處理奇數存活的輪空場次
+                if p2_id == 0:
+                    st.write(
+                        f"#### 🎉 【{row['組別標籤']}】 **🟢 {p1_str}** 本輪輪空（自動獲得 1 勝，比分記 `4 : 2`）"
+                    )
+                    st.write("---")
+                    continue
+
                 p2_str = f"{p2_id}號 {player_map.get(p2_id, '')}"
 
                 st.write(
@@ -1282,6 +1344,10 @@ with main_tab1:
                             f"目前紀錄：`{s1_curr} : {s2_curr}` ｜ 勝者："
                             f" `{player_map.get(w_id, '')}`"
                         )
+                        if max(s1_curr, s2_curr) < 4:
+                            st.warning(
+                                "⚠️ 注意：目前登記分數雙方皆未達 4 分，請確認是否為正常完賽比分。"
+                            )
                 else:
                     if w_id != 0:
                         st.write(
@@ -1367,6 +1433,7 @@ with main_tab1:
                 eliminated,
                 active,
                 _,
+                _,
             ) = calculate_swiss_cutoff_standings()
 
             col_q, col_e = st.columns(2)
@@ -1422,34 +1489,50 @@ with main_tab1:
                                     s2 = int(m_row.get("選手B_得分", 0))
 
                                     p1_name = f"{p1_id}號 {player_map.get(p1_id, '')}"
-                                    p2_name = f"{p2_id}號 {player_map.get(p2_id, '')}"
 
                                     with st.container(border=True):
-                                        if w_id == p1_id:
+                                        if p2_id == 0:
                                             st.markdown(
                                                 f"🟢 **{p1_name}** ({s1}) 👑"
                                             )
-                                            st.markdown(
-                                                f"🔴 ~~{p2_name}~~ ({s2})"
-                                            )
+                                            st.markdown("⚪ *輪空自動晉級*")
                                             if wins[p1_id] >= 3:
                                                 st.caption("🎉 **取得第3勝！**")
-                                            if losses[p2_id] >= 3:
-                                                st.caption("💀 **累積3敗淘汰**")
-                                        elif w_id == p2_id:
-                                            st.markdown(
-                                                f"🔴 ~~{p1_name}~~ ({s1})"
-                                            )
-                                            st.markdown(
-                                                f"🟢 **{p2_name}** ({s2}) 👑"
-                                            )
-                                            if wins[p2_id] >= 3:
-                                                st.caption("🎉 **取得第3勝！**")
-                                            if losses[p1_id] >= 3:
-                                                st.caption("💀 **累積3敗淘汰**")
                                         else:
-                                            st.markdown(f"⚔️ {p1_name}")
-                                            st.markdown(f" 🆚 {p2_name}")
+                                            p2_name = f"{p2_id}號 {player_map.get(p2_id, '')}"
+                                            if w_id == p1_id:
+                                                st.markdown(
+                                                    f"🟢 **{p1_name}** ({s1}) 👑"
+                                                )
+                                                st.markdown(
+                                                    f"🔴 ~~{p2_name}~~ ({s2})"
+                                                )
+                                                if wins[p1_id] >= 3:
+                                                    st.caption(
+                                                        "🎉 **取得第3勝！**"
+                                                    )
+                                                if losses[p2_id] >= 3:
+                                                    st.caption(
+                                                        "💀 **累積3敗淘汰**"
+                                                    )
+                                            elif w_id == p2_id:
+                                                st.markdown(
+                                                    f"🔴 ~~{p1_name}~~ ({s1})"
+                                                )
+                                                st.markdown(
+                                                    f"🟢 **{p2_name}** ({s2}) 👑"
+                                                )
+                                                if wins[p2_id] >= 3:
+                                                    st.caption(
+                                                        "🎉 **取得第3勝！**"
+                                                    )
+                                                if losses[p1_id] >= 3:
+                                                    st.caption(
+                                                        "💀 **累積3敗淘汰**"
+                                                    )
+                                            else:
+                                                st.markdown(f"⚔️ {p1_name}")
+                                                st.markdown(f" 🆚 {p2_name}")
                     else:
                         st.caption("⏳ 尚未開打")
                         with st.container(border=True):
@@ -1476,7 +1559,11 @@ with main_tab1:
                     disp.append({
                         "組別": row["組別標籤"],
                         "選手 A": f"{p1_id}號 {player_map.get(p1_id, '')}",
-                        "選手 B": f"{p2_id}號 {player_map.get(p2_id, '')}",
+                        "選手 B": (
+                            f"{p2_id}號 {player_map.get(p2_id, '')}"
+                            if p2_id != 0
+                            else "輪空 (Bye)"
+                        ),
                         "對戰比分": (
                             f"{s1} : {s2}" if w_id != 0 else "⏳ 未完賽"
                         ),
@@ -1492,7 +1579,7 @@ with main_tab1:
                     hide_index=True,
                 )
 
-    # --- Tab 4: 決賽 & 18人外卡賽 ---
+    # --- Tab 4: 決賽 & 18人外卡賽 (修正改分後名次變動閃退 Bug) ---
     with tab4:
         st.header("🏆 決賽 & 18人外卡附加賽 (Play-In Match)")
         (
@@ -1505,6 +1592,7 @@ with main_tab1:
             qualified,
             eliminated,
             active,
+            _,
             _,
         ) = calculate_swiss_cutoff_standings()
 
@@ -1537,7 +1625,23 @@ with main_tab1:
                 """
                 )
 
-                if df_playin is None or df_playin.empty:
+                # 若第8、9名因改分而變動，自動同步更新外卡對戰表並避免 ValueError
+                if (
+                    df_playin is None
+                    or df_playin.empty
+                    or int(
+                        df_playin.loc[
+                            df_playin["場次"] == "外卡戰", "選手A"
+                        ].values[0]
+                    )
+                    != p8
+                    or int(
+                        df_playin.loc[
+                            df_playin["場次"] == "外卡戰", "選手B"
+                        ].values[0]
+                    )
+                    != p9
+                ):
                     p_data = [
                         {"場次": "外卡戰", "選手A": p8, "選手B": p9, "勝者": 0}
                     ]
@@ -1545,8 +1649,13 @@ with main_tab1:
                     save_playin(df_playin)
 
                 pi_w = int(
-                    df_playin.loc[df_playin["場次"] == "外卡戰", "勝者"].values[0]
+                    df_playin.loc[df_playin["場次"] == "外卡戰", "勝者"].values[
+                        0
+                    ]
                 )
+                opts_pi = [0, p8, p9]
+                if pi_w not in opts_pi:
+                    pi_w = 0
 
                 p8_str = f"{p8}號 {player_map.get(p8,'')}"
                 p9_str = f"{p9}號 {player_map.get(p9,'')}"
@@ -1555,7 +1664,6 @@ with main_tab1:
                     f"##### ⚔️ 外卡戰：**🔴 {p8_str}** 🆚 **🔵 {p9_str}**"
                 )
                 if is_admin:
-                    opts_pi = [0, p8, p9]
                     sel_pi = st.selectbox(
                         "選擇外卡戰勝者：",
                         opts_pi,
@@ -2002,7 +2110,7 @@ with main_tab1:
                         * 🏅 **殿軍**：{fourth_place}
                         """)
             else:
-                st.info("⏳ 請先完成外卡戰以判定最終 8 強團隊！")
+                st.info("⏳ 請先完成外卡戰以判定最終 8 強名單！")
 
     # --- Tab 5: 戰績榜 (含得失分) ---
     with tab5:
@@ -2018,6 +2126,7 @@ with main_tab1:
                 qualified,
                 eliminated,
                 active,
+                _,
                 _,
             ) = calculate_swiss_cutoff_standings()
 
